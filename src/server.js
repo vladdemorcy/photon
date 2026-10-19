@@ -874,6 +874,23 @@ app.post('/api/test-action', wrap(async (req, res) => {
   res.json({ message: r.summary + (r.errors.length ? `. Problems: ${r.errors.join('; ')}` : '') });
 }));
 
+// TV sync boxes: which lights a box colors (to fill in the room's list), and trying it out.
+app.get('/api/sync/lights', wrap(async (req, res) => {
+  const key = String(req.query.box || '');
+  const [pid, tid] = lighting.splitKey(key);
+  const p = lighting.byId[pid];
+  const c = cfg.get().lighting[pid];
+  if (!p?.syncLights || !c?.enabled) throw new Error('Turn that sync box\'s connection on first');
+  res.json({ lights: await p.syncLights(c, tid, cfg.get().lighting) });
+}));
+app.post('/api/rooms/:id/sync', wrap(async (req, res) => {
+  const room = cfg.get().rooms.find(r => r.id === req.params.id);
+  if (!room?.sync?.box) throw new Error('Pick a sync box for this room and let it save first');
+  const message = await engine.setSync(room, Boolean(req.body?.on), { mediaType: room.mediaTypes[0] || 'movie' });
+  engine.addLog('ok', `${room.name}: ${message} (tried from Room settings)`, { room: room.name });
+  res.json({ message: message.charAt(0).toUpperCase() + message.slice(1) });
+}));
+
 app.post('/api/rooms/:id/simulate', wrap(async (req, res) => {
   const room = cfg.get().rooms.find(r => r.id === req.params.id);
   if (!room) throw new Error('Save the room first');

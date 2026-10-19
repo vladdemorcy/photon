@@ -101,11 +101,78 @@ async function takeSnapshot(room) {
   const snap = {};
   const { errors } = await eachTarget(room.targets, async ({ p, c }, tid, key) => { snap[key] = await p.snapshot(c, tid); });
   for (const e of errors) addLog('error', `${room.name}: could not save light state (${e})`, { room: room.name });
+  // Whether the TV sync box was already syncing, so "back to how it was" can leave it on.
+  if (room.sync?.box) {
+    try {
+      const box = syncBox(room);
+      stateFor(room.id).syncBefore = (await box.p.syncState(box.c, box.tid)).on;
+    } catch { stateFor(room.id).syncBefore = false; }
+  }
   return snap;
 }
 
-async function applyAction(room, action, snapshot) {
+// ---- TV sync boxes ------------------------------------------------------------------------
+// A room can have a sync box (Hue Sync Box, or Govee DreamView). Photon starts and stops it with
+// playback, and while it syncs Photon leaves the lights it colors alone, so the two don't fight.
+const AUTO_SYNC = { play: 'start', resume: 'start', pause: 'stop', stop: 'stop', scrobble: 'leave' };
+const SYNC_MODE_LABEL = { video: 'video', music: 'music', game: 'game' };
+
+function syncBox(room) {
+  const key = room.sync?.box;
+  if (!key) return null;
+  const [pid, tid] = lighting.splitKey(key);
+  const { p, c } = provider(pid);
+  if (!p.syncSet) throw new Error(`${p.label} can't sync with the TV`);
+  return { p, c, tid, s: room.sync };
+}
+
+function syncPlan(room, action, event) {
+  if (!room.sync?.box) return 'leave';
+  if (action.sync !== 'auto') return action.sync;
+  if (event === 'stop' && action.type === 'restore' && room.id) return stateFor(room.id).syncBefore ? 'start' : 'stop';
+  return AUTO_SYNC[event] || 'leave';
+}
+
+async function setSync(room, on, ev) {
+  const box = syncBox(room);
+  const mode = box.s.mode === 'auto' ? (ev?.mediaType === 'music' ? 'music' : 'video') : box.s.mode;
+  await box.p.syncSet(box.c, box.tid, { on, mode, intensity: box.s.intensity, brightness: box.s.brightness });
+  if (room.id) stateFor(room.id).syncing = on;
+  const tuned = box.p.id === 'huesync' ? ` (${SYNC_MODE_LABEL[mode]}, ${box.s.intensity})` : '';
+  return on ? `started syncing with the TV${tuned}` : 'stopped syncing with the TV';
+}
+
+async function applyAction(room, action, snapshot, event, ev) {
+  const plan = syncPlan(room, action, event);
+  const extra = [];
+  const syncErrors = [];
+  // Stop syncing first, so the lights are free before Photon sets them.
+  if (plan === 'stop') {
+    try { extra.push(await setSync(room, false, ev)); } catch (err) { syncErrors.push(`TV sync box: ${err.message}`); }
+  }
+  const syncing = plan === 'start' || (plan === 'leave' && room.id && stateFor(room.id).syncing);
+  const skip = new Set(syncing ? room.sync?.lights || [] : []);
+  const r = await applyLights(room, action, snapshot, skip);
+  if (plan === 'start') {
+    try { extra.push(await setSync(room, true, ev)); } catch (err) { syncErrors.push(`TV sync box: ${err.message}`); }
+  }
+  const synced = extra.length; // sync box commands that worked
+  if (skip.size && action.type !== 'none') extra.push('left the lights the sync box colors to it');
+  return { ok: r.ok + synced, summary: [r.summary, ...extra].join('; '), errors: [...r.errors, ...syncErrors] };
+}
+
+// The lights to set: the room's lights, minus the ones the sync box is coloring. A group that
+// includes some of those is split into its other lights.
+async function applyLights(room, action, snapshot, skip) {
   const transition = Math.max(0, Number(action.transition) || 0);
+  const targets = room.targets.filter(k => !skip.has(k));
+  const withoutSynced = async (p, c, tid) => {
+    if (!skip.size || !p.members) return null;
+    const ids = await p.members(c, tid).catch(() => [tid]);
+    const pid = p.id;
+    const left = ids.filter(id => !skip.has(`${pid}::${id}`));
+    return left.length === ids.length ? null : left;
+  };
   switch (action.type) {
     case 'none':
       return { summary: 'left the lights alone', ok: 0, errors: [] };
@@ -120,7 +187,7 @@ async function applyAction(room, action, snapshot) {
     }
 
     case 'restore': {
-      const keys = Object.keys(snapshot || {});
+      const keys = Object.keys(snapshot || {}).filter(k => !skip.has(k));
       if (!keys.length) return { summary: 'nothing to restore (no saved state)', ok: 0, errors: [] };
       const r = await eachTarget(keys, ({ p, c }, tid, key) => p.restore(c, tid, snapshot[key], transition));
       return { summary: `restored ${r.ok} light(s) to how they were`, ...r };
@@ -130,7 +197,9 @@ async function applyAction(room, action, snapshot) {
     case 'state': {
       const s = lightState(action);
       const each = action.colorMode === 'random' && action.randomEach;
-      const r = await eachTarget(room.targets, async ({ p, c }, tid) => {
+      const r = await eachTarget(targets, async ({ p, c }, tid) => {
+        const left = await withoutSynced(p, c, tid);
+        if (left) { for (const id of left) await p.apply(c, id, each ? lightState(action) : s); return; }
         if (!each) return p.apply(c, tid, s);
         // Own color per light: split groups into their lights when the system allows it.
         const ids = p.members ? await p.members(c, tid).catch(() => [tid]) : [tid];
@@ -159,7 +228,7 @@ async function runRule(room, event, ev) {
     return;
   }
   try {
-    const r = await applyAction(room, rule.action, st.snapshot);
+    const r = await applyAction(room, rule.action, st.snapshot, event, ev);
     const level = r.errors.length ? (r.ok ? 'warn' : 'error') : 'ok';
     addLog(level, `${room.name}: ${event} → "${rule.name}": ${r.summary}${r.errors.length ? `. Problems: ${r.errors.join('; ')}` : ''}`,
       { room: room.name, event, rule: rule.name, title: ev?.title });
@@ -256,12 +325,12 @@ async function handle(ev) {
 function status() {
   return cfg.get().rooms.map(r => {
     const st = stateFor(r.id);
-    return { id: r.id, status: st.status, title: st.title, player: st.player, hasSnapshot: Boolean(st.snapshot) };
+    return { id: r.id, status: st.status, title: st.title, player: st.player, hasSnapshot: Boolean(st.snapshot), syncing: Boolean(st.syncing) };
   });
 }
 
 module.exports = {
-  handle, status, applyAction, pickRule, addLog, notePlayer,
+  handle, status, applyAction, pickRule, addLog, notePlayer, setSync,
   log: () => log,
   seenPlayers: () => [...seenPlayers.values()],
 };

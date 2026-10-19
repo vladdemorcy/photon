@@ -595,9 +595,105 @@ function editorHtml(r) {
         </div>
         <p class="muted small">The wait stops the lights jumping up between episodes when the next one starts on its own.</p>
         <label class="switch"><input type="checkbox" id="snapshot" ${r.snapshotOnPlay ? 'checked' : ''}><i></i>Remember how the lights were when playback starts</label>
+        ${syncSettingsHtml(r)}
         <div><button class="btn danger sm" data-act="delete-room">Delete room</button></div>
       </section>
     </div>`;
+}
+
+// ---- TV sync box (Hue Sync Box, Govee DreamView) ----
+const SYNC_INTENSITY_LABEL = { subtle: 'Subtle', moderate: 'Moderate', high: 'High', intense: 'Intense' };
+function syncDefaults(r) {
+  r.sync = { box: '', mode: 'auto', intensity: 'moderate', brightness: 100, lights: [], ...(r.sync || {}) };
+  return r.sync;
+}
+function syncBoxes() {
+  return S.targets.flatMap(p => p.targets.filter(t => t.type === 'sync').map(t => ({ key: `${p.id}::${t.id}`, name: t.name, pid: p.id, label: p.label, caps: t.caps || {} })));
+}
+// The room's lights, with groups opened up into their lights, for ticking which ones the box colors.
+function roomLightsFlat(r) {
+  const out = [];
+  for (const key of r.targets) {
+    const t = targetInfo(key);
+    for (const k of t.members.length ? t.members : [key]) if (!out.includes(k)) out.push(k);
+  }
+  return out;
+}
+function syncSettingsHtml(r) {
+  const sy = syncDefaults(r);
+  const boxes = syncBoxes();
+  const box = boxes.find(b => b.key === sy.box);
+  const hue = box?.pid === 'huesync';
+  const lights = roomLightsFlat(r);
+  return `<div class="sync-settings" id="syncSettings">
+    <h3>TV sync box</h3>
+    ${!boxes.length && !sy.box ? `<p class="muted small">A Hue Sync Box or a Govee sync box colors lights from the picture on the TV. Photon can start it when something plays and stop it on pause and stop. Connect a Hue Sync Box, or add your Govee cloud API key for DreamView, in <a href="#connections">Connections</a>.</p>` : `
+    <label class="field"><span>Sync box for this room</span>
+      <select id="syncBox"><option value="">None</option>
+        ${boxes.map(b => `<option value="${esc(b.key)}" ${b.key === sy.box ? 'selected' : ''}>${esc(b.name)} (${esc(b.label)})</option>`).join('')}
+        ${sy.box && !box ? `<option value="${esc(sy.box)}" selected>${esc(splitKey(sy.box)[1])} (not found right now)</option>` : ''}
+      </select></label>
+    ${sy.box ? `
+    <p class="muted small">Photon starts syncing when something starts or resumes and stops it on pause and stop. You can change that in each behavior. While it syncs, Photon leaves the lights it colors alone and only sets the room's other lights.</p>
+    ${hue ? `
+    <div class="settings-grid">
+      <label class="field"><span>Mode</span><select id="syncMode">
+        ${[['auto', 'Automatic'], ['video', 'Video'], ['music', 'Music'], ['game', 'Game']].map(([v, l]) => `<option value="${v}" ${sy.mode === v ? 'selected' : ''}>${l}</option>`).join('')}
+      </select><small class="muted">Automatic uses music mode for music and video mode for the rest.</small></label>
+      <label class="field"><span>Brightness <b data-out="syncBright">${sy.brightness}%</b></span><input type="range" min="0" max="100" id="syncBright" value="${sy.brightness}"></label>
+    </div>
+    <div><div class="label">Intensity</div><div class="seg" role="group" aria-label="Intensity">
+      ${Object.entries(SYNC_INTENSITY_LABEL).map(([v, l]) => `<button data-sync-intensity="${v}" aria-pressed="${sy.intensity === v}">${l}</button>`).join('')}
+    </div></div>` : `<p class="muted small">Govee's DreamView mode and intensity stay as set in the Govee app. Photon switches it on and off.</p>`}
+    <div>
+      <div class="label">Lights the sync box colors</div>
+      ${lights.length ? `<div class="chips checks" id="syncLights">${lights.map(k => `<button class="chip" data-sync-light="${esc(k)}" aria-pressed="${sy.lights.includes(k)}"><span class="tick" aria-hidden="true"></span>${esc(targetInfo(k).name)}</button>`).join('')}</div>` : '<p class="muted small">Add the room\'s lights first.</p>'}
+      <div class="actions-row" style="margin-top:8px"><button class="btn sm" data-act="sync-detect">Find them</button>
+        <button class="btn sm" data-act="sync-on">Start syncing</button><button class="btn sm" data-act="sync-off">Stop syncing</button></div>
+    </div>` : ''}`}
+  </div>`;
+}
+function bindSyncSettings(r) {
+  const box = $('#syncSettings');
+  if (!box) return;
+  const redraw = () => { box.outerHTML = syncSettingsHtml(r); bindSyncSettings(r); };
+  $('#syncBox', box)?.addEventListener('change', async e => {
+    const sy = syncDefaults(r);
+    sy.box = e.target.value;
+    sy.lights = [];
+    commit(0);
+    redraw();
+    if (sy.box) detectSyncLights(r, redraw, true);
+  });
+  $('#syncMode', box)?.addEventListener('change', e => { r.sync.mode = e.target.value; commit(); });
+  $('#syncBright', box)?.addEventListener('input', e => { r.sync.brightness = Number(e.target.value); $('[data-out="syncBright"]', box).textContent = `${r.sync.brightness}%`; commit(800); });
+  box.addEventListener('click', async e => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.syncIntensity) { r.sync.intensity = b.dataset.syncIntensity; commit(); redraw(); return; }
+    if (b.dataset.syncLight) {
+      const k = b.dataset.syncLight;
+      r.sync.lights = r.sync.lights.includes(k) ? r.sync.lights.filter(x => x !== k) : [...r.sync.lights, k];
+      b.setAttribute('aria-pressed', r.sync.lights.includes(k));
+      commit();
+      return;
+    }
+    if (b.dataset.act === 'sync-detect') { detectSyncLights(r, redraw, false); return; }
+    if (b.dataset.act === 'sync-on' || b.dataset.act === 'sync-off') {
+      b.disabled = true;
+      try { await saving; toast((await api('POST', `/api/rooms/${r.id}/sync`, { on: b.dataset.act === 'sync-on' })).message); } catch (err) { toast(err.message, true); }
+      b.disabled = false;
+    }
+  });
+}
+async function detectSyncLights(r, redraw, quiet) {
+  try {
+    const { lights } = await api('GET', `/api/sync/lights?box=${encodeURIComponent(r.sync.box)}`);
+    const mine = roomLightsFlat(r);
+    const found = lights.filter(k => mine.includes(k));
+    if (found.length) { r.sync.lights = found; commit(); redraw(); toast(`The sync box colors ${found.length} of this room's lights. Photon leaves them to it while it syncs.`); }
+    else if (!quiet) toast(lights.length ? 'The sync box colors lights that aren\'t in this room. Tick the ones it colors here, if any.' : 'Photon couldn\'t tell which lights the sync box colors. Tick them here.', true);
+  } catch (err) { if (!quiet) toast(err.message, true); }
 }
 
 function playerChip(key) {
@@ -897,6 +993,9 @@ function ruleBodyHtml(r, rule) {
       </select></label>
       ${scenes.length ? '' : '<p class="muted small">None of your connected systems have scenes yet. Hue, LIFX, Nanoleaf effects and Home Assistant scenes show up here.</p>'}` : ''}
     ${a.type === 'restore' ? '<p class="muted small">Puts every light back exactly how it was when playback started. Needs "Remember how the lights were" on in Room settings.</p>' : ''}
+    ${r.sync?.box ? `<label class="field" style="max-width:340px"><span>TV sync box</span><select data-rf="action.sync">
+      ${[['auto', 'Automatic (on to play, off to pause or stop)'], ['start', 'Start syncing'], ['stop', 'Stop syncing'], ['leave', 'Leave it as it is']].map(([v, l]) => `<option value="${v}" ${(a.sync || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}
+    </select></label>` : ''}
     ${['state', 'scene', 'restore', 'off'].includes(a.type) ? `<label class="field" style="max-width:200px"><span>Fade (seconds)</span><input type="number" min="0" max="60" step="0.5" data-rf="action.transition" value="${a.transition}"></label>` : ''}
     <div class="actions-row">
       ${['state', 'off', 'scene'].includes(a.type) ? '<button class="btn sm" data-act="try-rule">Try on the lights</button>' : ''}
@@ -954,7 +1053,8 @@ function libraryHtml(r) {
   if (!S.targetsLoaded) lights = `<p class="hint">Loading lights…</p>`;
   else if (!S.targets.length) lights = `<p class="hint">No lighting system is turned on. <a href="#connections">Connect one</a>.</p>`;
   else {
-    lights = S.targets.map(p => {
+    // Sync boxes aren't lights to place; a room picks one under Room settings.
+    lights = S.targets.filter(p => p.id !== 'huesync').map(p => ({ ...p, targets: p.targets.filter(t => t.type !== 'sync') })).map(p => {
       const tree = lightTree(p);
       const groupBlock = g => {
         const key = `${p.id}::${g.id}`;
@@ -1635,6 +1735,7 @@ function bindSettings(r) {
   });
   $('#stopDelay').addEventListener('input', e => { r.stopDelaySeconds = clamp(Number(e.target.value) || 0, 0, 120); commit(); });
   $('#snapshot').addEventListener('change', e => { r.snapshotOnPlay = e.target.checked; commit(); });
+  bindSyncSettings(r);
   $('#outdoor')?.addEventListener('change', e => {
     const L = r.layout;
     L.outdoor = e.target.checked;

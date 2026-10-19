@@ -22,7 +22,11 @@ const DEFAULT_ACTION = {
   color: '#ff8a3d',
   scene: '',         // "<provider>::<sceneId>"
   transition: 1,     // seconds
+  sync: 'auto',      // the room's TV sync box: auto | start | stop | leave
 };
+const SYNC_ACTIONS = ['auto', 'start', 'stop', 'leave'];
+const SYNC_MODES = ['auto', 'video', 'music', 'game'];
+const SYNC_INTENSITIES = ['subtle', 'moderate', 'high', 'intense'];
 
 let config = null;
 const arr = v => (Array.isArray(v) ? v : []);
@@ -49,7 +53,20 @@ function normalizeAction(a = {}) {
   const out = { ...DEFAULT_ACTION, ...a };
   out.randomEach = Boolean(out.randomEach);
   out.palette = arr(out.palette).filter(c => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 12);
+  if (!SYNC_ACTIONS.includes(out.sync)) out.sync = 'auto';
   return out;
+}
+
+// The room's TV sync box (a Hue Sync Box, or a Govee device with DreamView), if it has one.
+// "lights" are the lights the box colors: Photon leaves them alone while the box syncs.
+function normalizeSync(s = {}) {
+  return {
+    box: /^[a-z]+::.+$/.test(s.box || '') ? String(s.box) : '',
+    mode: SYNC_MODES.includes(s.mode) ? s.mode : 'auto',
+    intensity: SYNC_INTENSITIES.includes(s.intensity) ? s.intensity : 'moderate',
+    brightness: clampNum(s.brightness, 0, 100, 100),
+    lights: arr(s.lights).map(String).slice(0, 100),
+  };
 }
 
 function normalizeRoom(r = {}) {
@@ -66,6 +83,7 @@ function normalizeRoom(r = {}) {
     snapshotOnPlay: r.snapshotOnPlay !== false,
     stopDelaySeconds: numOr(r.stopDelaySeconds, 10),
     rules: arr(r.rules).map(normalizeRule),
+    sync: normalizeSync(r.sync),
     layout: normalizeLayout(r.layout, arr(r.targets).map(String)),
   };
 }
@@ -127,7 +145,7 @@ function clampNum(v, lo, hi, d) {
 }
 
 const DEFAULT_COLORS = {
-  hue: '#f5b301', govee: '#2ec4b6', lifx: '#ff5d8f', wiz: '#4cc9f0', nanoleaf: '#7bd389', dirigera: '#0a6fd6', tuya: '#ff7a3d', lutron: '#c9a227', homeassistant: '#5b8cff',
+  hue: '#f5b301', huesync: '#e8a000', govee: '#2ec4b6', lifx: '#ff5d8f', wiz: '#4cc9f0', nanoleaf: '#7bd389', dirigera: '#0a6fd6', tuya: '#ff7a3d', lutron: '#c9a227', homeassistant: '#5b8cff',
   plex: '#e5a00d', jellyfin: '#aa5cc3', emby: '#52b54b',
   roku: '#6f1ab1', lg: '#a50034', androidtv: '#3ddc84', cast: '#4285f4', vizio: '#8e97ab', samsung: '#1428a0',
 };
