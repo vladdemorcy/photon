@@ -261,10 +261,11 @@ public class NodeService extends Service {
     // ---- Notification ---------------------------------------------------------------------
 
     private void showNotification() {
-        String url = Net.homeUrl(this);
-        String title = running && url != null ? "Photon is running" : status;
-        String text = url != null
-                ? "Open " + url + " on any device at home."
+        // Photon only opens in this app (see ON_PHONE in server.js), so no address to show.
+        boolean onWifi = Net.homeUrl(this) != null;
+        String title = running && onWifi ? "Photon is running" : status;
+        String text = onWifi
+                ? "Your lights follow what's playing. Tap to open Photon."
                 : "Waiting for Wi-Fi. Photon needs to be on your home network.";
         if (!status.startsWith("Starting") && !status.startsWith("Photon is")) text = status;
 

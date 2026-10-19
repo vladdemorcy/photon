@@ -112,6 +112,12 @@ const tlsMgr = tlsLib.create(cfg.CONFIG_PATH);
 const auth = authLib.create(DATA_DIR);
 const secrets = secretsLib.create(lighting, media);
 let httpsServer = null;
+
+// Photon running in the Android app: the page and its settings only open on the phone itself
+// (in the app). Other devices on the network can only reach the webhooks, which media servers
+// use and which carry their own secret key. HTTPS isn't offered, since nothing else signs in.
+const ON_PHONE = process.env.PHOTON_SERVICE === 'android';
+const fromThisDevice = req => /^(127\.\d+\.\d+\.\d+|::1|::ffff:127\.\d+\.\d+\.\d+)$/.test(String(req.socket?.remoteAddress || ''));
 let httpsPortOpen = null;
 let httpsError = '';
 app.disable('x-powered-by');
@@ -162,6 +168,9 @@ app.use((req, res, next) => {
     'Cross-Origin-Opener-Policy': 'same-origin',
     'Permissions-Policy': 'camera=(), microphone=(), payment=(), usb=()',
   });
+  if (ON_PHONE && !fromThisDevice(req) && !(req.method === 'POST' && req.path.startsWith('/webhook/'))) {
+    return res.status(403).type('text/plain').send('Photon on this phone only opens in the Photon app on the phone itself.');
+  }
   if (hostAllowed(req.headers.host)) return next();
   res.status(421).type('text/plain').send(`Photon only answers at this computer's own addresses, and "${String(req.headers.host || '').slice(0, 100)}" isn't one of them. Use its IP address, or add this name under Settings > Secure connection (HTTPS) > Other names.`);
 });
@@ -292,6 +301,7 @@ app.use((req, res, next) => {
 });
 
 function applyTls() {
+  if (ON_PHONE) return; // no HTTPS on a phone (see ON_PHONE)
   const t = cfg.get().tls;
   let opts = null;
   try {
@@ -505,6 +515,7 @@ app.get('/api/meta', (req, res) => {
   const host = lanAddresses()[0] || req.hostname;
   res.json({
     version: VERSION,
+    onPhone: ON_PHONE,
     settingsProblem: cfg.status().readOnly,
     lighting: lighting.providers.map(p => ({ id: p.id, label: p.label, blurb: p.blurb, fields: p.fields, actions: p.actions || [] })),
     media: media.sources.map(s => ({
@@ -739,6 +750,7 @@ function setTls(patch) {
   cfg.set({ ...c, tls: { ...c.tls, ...patch } });
 }
 
+app.use('/api/tls', (req, res, next) => (ON_PHONE ? res.status(404).json({ error: 'HTTPS isn\'t used when Photon runs on a phone.' }) : next()));
 app.get('/api/tls', (req, res) => res.json(tlsInfo(req)));
 
 app.post('/api/tls/generate', wrap(async (req, res) => {

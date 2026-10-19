@@ -136,7 +136,7 @@ public class MainActivity extends Activity {
         if (up) {
             setStatus(GOOD, "Photon " + version + " is running");
             detailText.setText(home != null
-                    ? "Open " + home + " on any computer, phone or tablet at home, or tap Open Photon below."
+                    ? "Your lights follow what's playing. Tap Open Photon below to set up rooms and connections."
                     : "This phone isn't on Wi-Fi. Photon needs to be on the same network as your lights and TVs.");
         } else if (stopped) {
             setStatus(MUTED, "Photon is stopped");
@@ -321,7 +321,7 @@ public class MainActivity extends Activity {
 
         notifyRow = new LinearLayout(this);
         notifyRow.setOrientation(LinearLayout.VERTICAL);
-        notifyText = text("Notifications are off, so you won't see Photon's address or its Stop button in the notification shade.", 14, MUTED, false);
+        notifyText = text("Notifications are off, so you won't see that Photon is running, or its Stop button, in the notification shade.", 14, MUTED, false);
         notifyRow.addView(notifyText);
         notifyButton = button("Turn on Photon's notification", false);
         notifyButton.setOnClickListener(new View.OnClickListener() {

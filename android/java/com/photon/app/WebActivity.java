@@ -30,6 +30,9 @@ import java.nio.charset.StandardCharsets;
 /** Photon's own web page, shown inside the app. */
 public class WebActivity extends Activity {
     private static final int PICK_FILE = 7;
+    private static final int SAVE_FILE = 8;
+    private String pendingSave;
+    private int pendingSaveReq;
 
     // Photon opens Plex sign-in in a new window. A phone has no windows, so window.open hands
     // the address to the phone's browser instead. Photon notices the sign-in by itself.
@@ -177,6 +180,30 @@ public class WebActivity extends Activity {
         // Results go back to the page through window.__photonBiometric. Each call first checks,
         // on the main thread, that the page asking is Photon's own.
 
+        /**
+         * Saves text the page made (the settings download) to a file the person picks, since a
+         * web view can't download files by itself. Android's own "save to" screen asks where.
+         */
+        @JavascriptInterface
+        public void saveFile(final int req, final String name, final String text) {
+            onPhotonPage(new Runnable() {
+                @Override public void run() {
+                    pendingSave = text;
+                    pendingSaveReq = req;
+                    Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                            .addCategory(Intent.CATEGORY_OPENABLE)
+                            .setType("application/json")
+                            .putExtra(Intent.EXTRA_TITLE, name);
+                    try {
+                        startActivityForResult(i, SAVE_FILE);
+                    } catch (ActivityNotFoundException e) {
+                        pendingSave = null;
+                        replyJs(req, "{\"ok\":false,\"error\":\"This phone has no app for saving files.\"}");
+                    }
+                }
+            });
+        }
+
         @JavascriptInterface
         public String biometricStatus() {
             return Biometric.status(WebActivity.this).toString();
@@ -226,8 +253,27 @@ public class WebActivity extends Activity {
         }
     }
 
+    private void replyJs(int req, String json) {
+        web.evaluateJavascript("window.__photonSaved&&window.__photonSaved(" + req + "," + json + ")", null);
+    }
+
     @Override
     protected void onActivityResult(int request, int result, Intent data) {
+        if (request == SAVE_FILE) {
+            String text = pendingSave;
+            pendingSave = null;
+            if (result != RESULT_OK || data == null || data.getData() == null || text == null) {
+                replyJs(pendingSaveReq, "{\"ok\":false,\"canceled\":true}");
+                return;
+            }
+            try (java.io.OutputStream out = getContentResolver().openOutputStream(data.getData())) {
+                out.write(text.getBytes(StandardCharsets.UTF_8));
+                replyJs(pendingSaveReq, "{\"ok\":true}");
+            } catch (Exception e) {
+                replyJs(pendingSaveReq, "{\"ok\":false,\"error\":\"The file couldn't be saved.\"}");
+            }
+            return;
+        }
         if (request == PICK_FILE && pendingFiles != null) {
             pendingFiles.onReceiveValue(WebChromeClient.FileChooserParams.parseResult(result, data));
             pendingFiles = null;
