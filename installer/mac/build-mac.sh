@@ -32,6 +32,7 @@ rm -rf "$THREE" && mv "$KEEP" "$THREE"
 mkdir -p "$LIB/support"
 cp -R "support/Photon.app" "support/Uninstall Photon.app" "$LIB/support/"
 for app in "$LIB/support/"*.app; do
+  mkdir -p "$app/Contents/Resources"   # empty in git, which doesn't keep empty folders
   cp support/photon.icns "$app/Contents/Resources/photon.icns"
   sed -i.bak "s/__VERSION__/$VERSION/g" "$app/Contents/Info.plist" && rm -f "$app/Contents/Info.plist.bak"
 done

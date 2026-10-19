@@ -30,6 +30,13 @@ jobs:
         with:
           node-version: 22
       - run: npm ci --no-audit --no-fund
+      - name: Make the throwaway test certificates
+        run: |
+          cd test/fixtures
+          openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes -keyout dirigera-key.pem -out dirigera-cert.pem -days 30 -subj "/CN=dirigera-test"
+          openssl req -x509 -newkey rsa:2048 -nodes -keyout lutron-ca-key.pem -out lutron-ca.pem -days 30 -subj "/CN=Test Lutron CA"
+          openssl req -newkey rsa:2048 -nodes -keyout lutron-bridge-key.pem -out lutron-bridge.csr -subj "/CN=test-bridge"
+          openssl x509 -req -in lutron-bridge.csr -CA lutron-ca.pem -CAkey lutron-ca-key.pem -CAcreateserial -out lutron-bridge.pem -days 30
       - name: Sign-in and request protection tests
         run: |
           mkdir -p "$RUNNER_TEMP/at"
