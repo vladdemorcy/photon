@@ -163,7 +163,7 @@ app.use((req, res, next) => {
     'Permissions-Policy': 'camera=(), microphone=(), payment=(), usb=()',
   });
   if (hostAllowed(req.headers.host)) return next();
-  res.status(421).type('text/plain').send(`Photon only answers at this computer's own addresses, and "${String(req.headers.host || '').slice(0, 100)}" isn't one of them. Use its IP address, or add this name under Connections > Secure connection (HTTPS) > Other names.`);
+  res.status(421).type('text/plain').send(`Photon only answers at this computer's own addresses, and "${String(req.headers.host || '').slice(0, 100)}" isn't one of them. Use its IP address, or add this name under Settings > Secure connection (HTTPS) > Other names.`);
 });
 
 // A request that came from this page itself, not from another website.

@@ -23,7 +23,7 @@ On Android, the Photon app's main screen also says whether Photon is running and
 - **"Too many wrong tries":** after five wrong passwords in a row, that device has to wait 15 minutes. Other devices can still sign in.
 - **Signed out on a device you use often:** sessions end 30 days after you last used Photon on that device, and after 180 days in any case. Changing the password, or *Sign out everywhere*, also signs every other device out.
 - **It asks for a setup code:** Photon has no password yet. The code is printed when Photon starts and saved in the `setup-code` file next to its settings (`C:\ProgramData\Photon` on Windows, `/Library/Application Support/Photon` on a Mac, read it with `sudo cat`). The installers fill it in for you when they open Photon.
-- **"Photon only answers at this computer's own addresses":** you opened Photon by a name it doesn't know, such as a name from your router's DNS or a reverse proxy. Use its IP address, or add the name under **Connections > Secure connection (HTTPS) > Other names**. Photon refuses unknown names so that a website can't point its own name at your network and talk to Photon.
+- **"Photon only answers at this computer's own addresses":** you opened Photon by a name it doesn't know, such as a name from your router's DNS or a reverse proxy. Use its IP address, or add the name under **Settings > Secure connection (HTTPS) > Other names**. Photon refuses unknown names so that a website can't point its own name at your network and talk to Photon.
 - **The Android app asks for the password instead of a fingerprint:** fingerprint or face sign-in turns itself off when a fingerprint or face is added to or removed from the phone, when Photon's password changes, and after *Sign out everywhere*. Sign in with the password and say OK when it offers fingerprint or face again. If it never offers, check that the phone has a screen lock and a fingerprint or face set up (Android 9 or newer); some phones' face unlock isn't secure enough for apps, and then only fingerprints work.
 - **A script or tool that used to change Photon's settings stopped working:** changes now need a signed-in session and the page's CSRF token. Webhooks from Plex, Jellyfin and Emby aren't affected, since they use their secret key instead.
 
@@ -39,7 +39,7 @@ Restart-Service Photon
 
 ## My rooms or settings disappeared after an update
 
-Nothing is deleted on update. Go to **Connections > Saved versions** and restore the newest version that lists your rooms. If you used to run Photon by hand from a folder, use **Import settings from another Photon** and pick that folder's `data\config.json`.
+Nothing is deleted on update. Go to **Settings > Saved versions** and restore the newest version that lists your rooms. If you used to run Photon by hand from a folder, use **Import settings from another Photon** and pick that folder's `data\config.json`.
 
 ## The installer flashes and closes (Windows)
 
@@ -89,7 +89,7 @@ Open the TV's card under **Connections > Smart TVs**. It shows what each TV repo
 - **The address changed:** give the phone a fixed address with a DHCP reservation in your router.
 - **Lights or TVs aren't found automatically:** type their IP addresses in the Photon card for them. Some Wi-Fi networks block the broadcast messages used for finding devices.
 - **Installing an update fails with "App not installed" or "conflicts with an existing package":** the new APK was signed with a different key from the one already on the phone. Only install APKs from this repository's Releases page.
-- **Use this device's location** (under *Your location*) doesn't work inside the app. Type the latitude and longitude, or open Photon in the phone's browser and use the button there.
+- **Use this device's location** (under **Settings > Your location**) doesn't work inside the app. Type the latitude and longitude, or open Photon in the phone's browser and use the button there.
 
 ## Still stuck?
 

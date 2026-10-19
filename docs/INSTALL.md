@@ -38,11 +38,11 @@ Use this to run Photon without a computer that's always on. It works best on a s
 4. Open **Photon**. It starts right away and asks to show notifications. Say **Allow**, so you can see Photon's address and its Stop button in the notification shade.
 5. Tap **Let Photon run in the background** and choose **Allow**. Without this, Android may pause Photon when the screen is off.
 6. Tap **Open Photon**. The first time, it asks you to choose a password. The one-time setup code it needs is filled in for you, since you're on the phone itself. After that, sign in with that password on the phone or from any computer, phone or tablet at home, using the address the app shows (like `http://192.168.1.50:8787`). Setup is the same as on a computer (below).
-7. After you sign in with the password, Photon asks whether to use your fingerprint or face next time. Say **OK** and touch the sensor (or look at the phone). From then on the app asks for your fingerprint or face instead of the password. Turn it off or on again under **Connections > Password and sign-in**. It needs Android 9 or newer, a screen lock, and a fingerprint or face set up in the phone's settings.
+7. After you sign in with the password, Photon asks whether to use your fingerprint or face next time. Say **OK** and touch the sensor (or look at the phone). From then on the app asks for your fingerprint or face instead of the password. Turn it off or on again under **Settings > Password and sign-in**. It needs Android 9 or newer, a screen lock, and a fingerprint or face set up in the phone's settings.
 
 Photon runs as a background service with a notification while it's running, and starts again by itself when the phone restarts (you can turn that off in the app). Its settings stay on the phone.
 
-**Moving from a computer:** on the computer, open Photon and go to **Connections > Saved versions**, type your password and click **Download settings**. Then stop Photon on the computer so the two don't both control your lights. Copy the downloaded file to the phone, and in Photon on the phone go to **Connections > Saved versions > Import settings from another Photon**. If you use Plex webhooks, Photon updates the address to the phone's for you.
+**Moving from a computer:** on the computer, open Photon and go to **Settings > Saved versions**, type your password and click **Download settings**. Then stop Photon on the computer so the two don't both control your lights. Copy the downloaded file to the phone, and in Photon on the phone go to **Settings > Saved versions > Import settings from another Photon**. If you use Plex webhooks, Photon updates the address to the phone's for you.
 
 **Give the phone a fixed address.** Set a DHCP reservation for it in your router, so the address you bookmark and Plex's webhook keep working.
 
@@ -57,13 +57,13 @@ If you ran Photon by hand (not with an installer), the first time you open it, i
 
 ## Updating
 
-Download the newer installer and run it. It upgrades in place and keeps your rooms, lights, sign-ins and settings. On Android, open the newer APK and tap **Update**; Photon restarts by itself. Photon also saves a copy of your settings every time it starts, so an update can always be undone under **Connections > Saved versions**.
+Download the newer installer and run it. It upgrades in place and keeps your rooms, lights, sign-ins and settings. On Android, open the newer APK and tap **Update**; Photon restarts by itself. Photon also saves a copy of your settings every time it starts, so an update can always be undone under **Settings > Saved versions**.
 
 ## Removing
 
 - **Windows:** Settings > Apps > Photon > Uninstall. You can keep or delete your settings.
 - **Mac:** Applications > Utilities > **Uninstall Photon**. You can keep or delete your settings.
-- **Android:** hold the Photon icon and choose **Uninstall** (or Settings > Apps > Photon > Uninstall). This deletes Photon's settings on the phone, so save a copy first if you might want them back: on a computer at home, open Photon from the phone's address, go to **Connections > Saved versions**, type your password and click **Download settings**.
+- **Android:** hold the Photon icon and choose **Uninstall** (or Settings > Apps > Photon > Uninstall). This deletes Photon's settings on the phone, so save a copy first if you might want them back: on a computer at home, open Photon from the phone's address, go to **Settings > Saved versions**, type your password and click **Download settings**.
 
 ## Forgot your password?
 

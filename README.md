@@ -10,11 +10,11 @@ Photon sets each room's lights to match what's playing. When a movie starts on t
 
 You can use more than one of each at the same time. A single room can mix Hue and Govee lights, for example, and respond to both Plex and Jellyfin players.
 
-**Version 1.5.** Photon now has a proper sign-in: you choose a password when you install it, and each browser stays signed in with a secure cookie. See [Signing in and security](#signing-in-and-security). 1.4 added Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
+**Version 1.5.** Photon now has a proper sign-in: you choose a password when you install it, and each browser stays signed in with a secure cookie. See [Signing in and security](#signing-in-and-security). 1.5.1 moves Photon's own options into a new **Settings** tab, so Connections is only for connecting lights, media servers and TVs. 1.4 added Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
 
 ## Install on Windows (easiest)
 
-Run **Photon-Setup-1.5.0.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
+Run **Photon-Setup-1.5.1.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
 
 - **Node.js:** checks for Node.js 18 or newer. If it's missing or too old, setup downloads the current LTS version from nodejs.org, checks it against nodejs.org's published SHA-256 checksums, and installs it to `C:\Program Files\nodejs`.
 - **Photon:** installs Photon to `C:\Program Files\Photon`. Everything it needs is included.
@@ -30,7 +30,7 @@ To update, run a newer Photon-Setup the same way. To remove Photon, use Settings
 
 ```
 set PHOTON_PASSWORD=the password you want
-Photon-Setup-1.5.0.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
+Photon-Setup-1.5.1.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
 "C:\Program Files\Photon\Uninstall Photon.exe" -Quiet [-DeleteData]
 ```
 
@@ -40,7 +40,7 @@ Windows SmartScreen may warn that the installer is from an unknown publisher, be
 
 ## Install on a Mac
 
-Open **Photon-1.5.0.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
+Open **Photon-1.5.1.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
 
 - **Node.js:** downloads its own copy from nodejs.org the first time (checked against nodejs.org's checksums) and keeps it in `/Library/Photon/node`, so nothing else on your Mac changes.
 - **Photon:** installs to `/Library/Photon` and runs as a background service (a launchd daemon, `com.photon.server`). It starts with the Mac, keeps running when nobody is logged in, and restarts if it stops.
@@ -110,7 +110,7 @@ Turn on each system you own. Its color is how you'll tell its lights apart on th
 
 ### 2. Connect your media server
 
-Each server gets its own webhook address, which you'll see on its card. The address includes a secret key, and you can generate a new key under *Webhook security*.
+Each server gets its own webhook address, which you'll see on its card. The address includes a secret key, and you can generate a new key under **Settings > Webhook security**.
 
 **Plex:** click **Sign in with Plex**. A plex.tv window opens, you sign in there, and it closes by itself. Photon only receives a sign-in token, never your password. If you can't use the popup, there's also a field to paste a token. Once you're signed in:
 - **Your server:** Photon only reacts to playback on the server you pick. Other servers your account can reach are ignored.
@@ -170,7 +170,7 @@ If two players in the same room are playing, stopping one leaves the lights alon
 
 ## Secure connection (HTTPS)
 
-Under **Connections > Secure connection (HTTPS)** you can turn on HTTPS in one of two ways. Plain HTTP keeps working alongside it on port 8787.
+Under **Settings > Secure connection (HTTPS)** you can turn on HTTPS in one of two ways. Plain HTTP keeps working alongside it on port 8787.
 
 **Photon's certificate.** Browsers warn about any certificate they don't already trust, and a self-signed one is no exception. So instead, Photon creates its own small certificate authority, valid for 10 years, and uses it to sign a certificate for this machine. That certificate covers localhost, the machine's name, `name.local`, its network IP addresses, and any extra names you add, such as `photon.home.lan`.
 - Click **Download Photon's certificate authority** and install it once on each device you open Photon from. The app shows the steps for Windows, Mac, iPhone/iPad, Android, Firefox and Linux. After that, the warning is gone for good.
@@ -186,15 +186,19 @@ Other settings:
 
 Turning on HTTPS also lets **Use this device's location** work from other devices, because browsers only share location with secure pages.
 
+## Connections and Settings
+
+**Connections** is only for connecting things: your lights, media servers and TVs. **Settings** is for how Photon itself runs: **Password and sign-in** (including fingerprint or face in the Android app), **Secure connection (HTTPS)**, **Your location** for sunrise and sunset, **Saved versions** (restore, import and download your settings) and **Webhook security**.
+
 ## Signing in and security
 
 **Your password.** The installers ask for it. If you run Photon by hand, the first time you open it Photon asks you to choose one, and for that it wants a one-time **setup code**. The code is printed when Photon starts and saved in the `setup-code` file next to your settings, so only someone with access to the computer running Photon can claim it. Passwords need at least 10 characters, and very common ones are refused. A few words together make a strong password that's easy to remember. Photon keeps only a salted scrypt hash of it, in `auth.json` next to the settings, never in `config.json`.
 
 **Staying signed in.** Signing in gives that browser a session cookie that page scripts can't read and other websites can't make the browser send. It lasts 30 days from the last time you used it, and 180 days at most. Every change also needs a token that only Photon's own page has, so another website, or another program on the same computer, can't change settings, reset anything or sign people out. Wrong passwords are slowed down, and after five in a row from one device it has to wait 15 minutes.
 
-**Change the password or sign everyone out** under **Connections > Password and sign-in**. Changing the password signs out every other device.
+**Change the password or sign everyone out** under **Settings > Password and sign-in**. Changing the password signs out every other device.
 
-**Fingerprint or face in the Android app.** After you sign in with the password in the app, Photon offers to use your fingerprint or face next time (you can also turn it on or off under **Connections > Password and sign-in**). The app keeps a device key that Android's keystore only unlocks right after a strong fingerprint or face match; your fingerprint never leaves Android, and Photon keeps only a hash of the key. The key only works from the phone Photon runs on. Adding a fingerprint or face to the phone, changing Photon's password, or *Sign out everywhere* turns it off, and the app asks for the password once. It needs Android 9 or newer and a screen lock.
+**Fingerprint or face in the Android app.** After you sign in with the password in the app, Photon offers to use your fingerprint or face next time (you can also turn it on or off under **Settings > Password and sign-in**). The app keeps a device key that Android's keystore only unlocks right after a strong fingerprint or face match; your fingerprint never leaves Android, and Photon keeps only a hash of the key. The key only works from the phone Photon runs on. Adding a fingerprint or face to the phone, changing Photon's password, or *Sign out everywhere* turns it off, and the app asks for the password once. It needs Android 9 or newer and a screen lock.
 
 **Forgot the password?** Run the installer again and choose a new one. Or, from an admin command prompt (Windows) or Terminal (Mac), run Photon's password tool:
 
@@ -214,7 +218,7 @@ node src/password.js set
 
 **Keys and tokens stay on the server.** Your Plex token, light keys and TV pairing keys are never sent to the browser. The page sees that one is saved, and that's all.
 
-**Only its own addresses.** Photon answers at localhost, this computer's IP addresses, its name and `name.local`. A request for any other name is refused, which stops a trick called DNS rebinding, where a website points its own name at your network to talk to Photon. If you reach Photon by another name, such as `photon.home.lan` or a reverse proxy's name, add it under **Connections > Secure connection (HTTPS) > Other names**, or list it in `PHOTON_HOSTNAMES`.
+**Only its own addresses.** Photon answers at localhost, this computer's IP addresses, its name and `name.local`. A request for any other name is refused, which stops a trick called DNS rebinding, where a website points its own name at your network to talk to Photon. If you reach Photon by another name, such as `photon.home.lan` or a reverse proxy's name, add it under **Settings > Secure connection (HTTPS) > Other names**, or list it in `PHOTON_HOSTNAMES`.
 
 **Webhooks** don't sign in. They're checked against their secret key before Photon reads anything else from the request.
 
@@ -227,8 +231,8 @@ The three buttons at the top right switch between **Match this device**, **Light
 - **Open in more than one window or device:** if another window or device saves a newer change, a page that's out of date can't overwrite it. That page loads the newer version and tells you. Pages that are just sitting open pick up changes from elsewhere on their own within a few seconds.
 - **A time Photon can't read** (say "9pm" instead of 21:00) doesn't block saving. Everything else saves, and that one behavior waits until its time is fixed.
 - **Closing the tab right after a change** still saves it. If Photon is restarting while you work, the page keeps trying until the save goes through.
-- **Saved versions:** under **Connections > Saved versions**, Photon keeps copies of your rooms, layouts and behaviors. It makes one every 10 minutes while you're making changes, one each time it starts (so there's always a copy from before an update), and one whenever you click *Save a copy now*. Restoring one first saves your current setup as another copy, so a restore can be undone. The copies are kept in `data/backups`, up to the last 60.
-- **Moving settings from another Photon:** if you ran Photon by hand before installing it, click *Import settings from another Photon* under **Connections > Saved versions** and pick the `config.json` in the old copy's `data` folder. Rooms, layouts, behaviors, the Plex sign-in, light keys and the webhook address all come across. Updates done with the installer keep your settings on their own, since they live in `C:\ProgramData\Photon` and the installer never touches that folder.
+- **Saved versions:** under **Settings > Saved versions**, Photon keeps copies of your rooms, layouts and behaviors. It makes one every 10 minutes while you're making changes, one each time it starts (so there's always a copy from before an update), and one whenever you click *Save a copy now*. Restoring one first saves your current setup as another copy, so a restore can be undone. The copies are kept in `data/backups`, up to the last 60.
+- **Moving settings from another Photon:** if you ran Photon by hand before installing it, click *Import settings from another Photon* under **Settings > Saved versions** and pick the `config.json` in the old copy's `data` folder. Rooms, layouts, behaviors, the Plex sign-in, light keys and the webhook address all come across. Updates done with the installer keep your settings on their own, since they live in `C:\ProgramData\Photon` and the installer never touches that folder.
 
 ## Activity
 
