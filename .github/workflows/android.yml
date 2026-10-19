@@ -44,8 +44,6 @@ jobs:
   test:
     needs: build
     runs-on: ubuntu-24.04
-    permissions:
-      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -76,11 +74,3 @@ jobs:
         with:
           name: android-test-results-api${{ matrix.api-level }}
           path: android-test-results
-      # TEMPORARY: puts the screenshots on a branch so they can be looked at in the browser.
-      - name: Publish screenshots
-        if: always()
-        run: |
-          mkdir shots && cp android-test-results/*.png shots/ && cd shots
-          git init -q -b ci-screens-api${{ matrix.api-level }}
-          git add . && git -c user.name=ci -c user.email=ci@localhost commit -qm "Screenshots from run ${{ github.run_number }}"
-          git push -f -q "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}" HEAD
