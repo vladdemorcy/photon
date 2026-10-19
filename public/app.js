@@ -339,14 +339,14 @@ async function loadPlex() {
 function route() {
   if (!S.config) return; // signed out: the sign-in screen is showing
   const [view, id] = location.hash.replace(/^#/, '').split('/');
-  S.view = ['rooms', 'connections', 'activity'].includes(view) ? view : 'rooms';
+  S.view = ['rooms', 'connections', 'activity', 'settings'].includes(view) ? view : 'rooms';
   if (S.view === 'rooms') {
     const has = x => x && S.config.rooms.some(r => r.id === x);
     S.roomId = has(id) ? id : has(S.roomId) ? S.roomId : S.config.rooms[0]?.id || null;
     S.sel = null;
   }
   $$('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.view === S.view ? 'page' : 'false'));
-  $('#pageTitle').textContent = { rooms: 'Rooms', connections: 'Connections', activity: 'Activity' }[S.view];
+  $('#pageTitle').textContent = { rooms: 'Rooms', connections: 'Connections', activity: 'Activity', settings: 'Settings' }[S.view];
   render();
 }
 window.addEventListener('hashchange', route);
@@ -356,6 +356,7 @@ function render() {
   if (S.view !== 'rooms') { S.sheet = null; document.body.classList.remove('pop-open'); }
   document.body.classList.toggle('sheet-open', Boolean(S.mobile && S.sheet));
   if (S.view === 'connections') renderConnections();
+  else if (S.view === 'settings') renderSettings();
   else if (S.view === 'activity') renderActivity();
   else renderRooms();
   settingsBanner();
@@ -1806,8 +1807,7 @@ function renderConnections() {
   const lightsOn = on(S.meta.lighting.map(x => ({ kind: 'lighting', id: x.id })));
   const mediaOn = on(S.meta.media.filter(x => x.group !== 'tv').map(x => ({ kind: 'media', id: x.id })));
   const tvsOn = on(S.meta.media.filter(x => x.group === 'tv').map(x => ({ kind: 'media', id: x.id })));
-  const jump = [['conn-lights', 'Lights', lightsOn], ['conn-media', 'Media server', mediaOn], ['conn-tvs', 'Smart TVs', tvsOn],
-    ['conn-account', 'Password'], ['conn-location', 'Location'], ['tlsBox', 'HTTPS'], ['backupBox', 'Saved versions'], ['conn-webhook', 'Webhook key']];
+  const jump = [['conn-lights', 'Lights', lightsOn], ['conn-media', 'Media server', mediaOn], ['conn-tvs', 'Smart TVs', tvsOn]];
   app.innerHTML = `<nav class="jump" aria-label="Jump to">
     ${jump.map(([id, label, n]) => `<button data-jump="${id}">${label}${n ? `<span class="count">${n} on</span>` : ''}</button>`).join('')}
   </nav>
@@ -1824,7 +1824,34 @@ function renderConnections() {
       <header><h1>Smart TVs</h1><p>Lights can also follow whatever is playing on a TV or streaming box, from any app: Netflix, YouTube, Disney+ and the rest. Turn on the kinds you have, then pick the TV as a room's player.</p></header>
       ${S.meta.media.filter(s => s.group === 'tv').map(s => sysHtml('media', s)).join('')}
     </section>
-    <section class="panel block" id="conn-account">
+  </div>`;
+  bindJump();
+  bindConnections();
+  refreshTvStatus();
+}
+
+// The row of section buttons at the top of Connections and Settings (phones).
+function bindJump() {
+  $('.jump', app).addEventListener('click', e => {
+    const b = e.target.closest('[data-jump]');
+    const el = b && document.getElementById(b.dataset.jump);
+    if (el) window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - 112, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// SETTINGS: how Photon itself runs (sign-in, HTTPS, location, saved versions, webhook key).
+// Connections is only for connecting lights, media servers and TVs.
+function renderSettings() {
+  const c = S.config;
+  const sun = S.meta.sun;
+  const jump = [['set-account', 'Password'], ['tlsBox', 'HTTPS'], ['set-location', 'Location'], ['backupBox', 'Saved versions'], ['set-webhook', 'Webhook key']];
+  app.innerHTML = `<nav class="jump" aria-label="Jump to">
+    ${jump.map(([id, label]) => `<button data-jump="${id}">${label}</button>`).join('')}
+  </nav>
+  <div class="conn settings">
+    <header class="settings-head"><h1>Settings</h1><p>How Photon itself runs: signing in, secure connections, your location for sunrise and sunset, and saved copies of your setup.</p></header>
+    <section class="panel block" id="set-account">
       <h2>Password and sign-in</h2>
       <p class="muted small">Photon asks for this password on each device you open it on. A device stays signed in for 30 days of use, until you sign it out.</p>
       <form id="pwForm" class="pw-form">
@@ -1839,7 +1866,8 @@ function renderConnections() {
       <div class="actions-row"><button class="btn sm" data-act="sign-out">Sign out of this device</button>
         <button class="btn sm danger" data-act="sign-out-all">Sign out everywhere</button></div>
     </section>
-    <section class="panel block" id="conn-location">
+    <section class="panel block" id="tlsBox">${tlsHtml()}</section>
+    <section class="panel block" id="set-location">
       <h2>Your location</h2>
       <p class="muted small">Used only to work out sunrise and sunset for time-based behaviors. Today: dawn ${sun.dawn}, sunrise ${sun.sunrise}, sunset ${sun.sunset}, dusk ${sun.dusk}${sun.usingFallback ? ' (typical times until you set a location)' : ''}.</p>
       <div class="settings-grid">
@@ -1848,7 +1876,6 @@ function renderConnections() {
       </div>
       <div class="actions-row"><button class="btn sm" data-act="geo">Use this device's location</button></div>
     </section>
-    <section class="panel block" id="tlsBox">${tlsHtml()}</section>
     <section class="panel block" id="backupBox">
       <h2>Saved versions</h2>
       <p class="muted small">Photon keeps a copy of your rooms, layouts and behaviors every 10 minutes while you make changes, and each time it starts. Bring back an older version here if something goes wrong. Your Plex sign-in and HTTPS settings stay as they are.</p>
@@ -1863,23 +1890,42 @@ function renderConnections() {
         <button class="btn sm" type="submit">Download settings</button>
       </form>
     </section>
-    <section class="panel block" id="conn-webhook">
+    <section class="panel block" id="set-webhook">
       <h2>Webhook security</h2>
       <p class="muted small">Each webhook address contains a secret key so only your server can trigger Photon. Make a new key if an address leaked, then update it in your media server.</p>
       <div><button class="btn sm danger" data-act="regen">Make a new key</button></div>
     </section>
   </div>`;
-  $('.jump', app).addEventListener('click', e => {
-    const b = e.target.closest('[data-jump]');
-    const el = b && document.getElementById(b.dataset.jump);
-    if (el) window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - 112, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
-  });
+  bindJump();
   bindAccount();
-  bindConnections();
-  refreshTvStatus();
+  bindAppSettings();
   bindTls();
   loadBackups();
-  api('GET', '/api/tls').then(t => { S.tls = t; if (S.view === 'connections') { $('#tlsBox').innerHTML = tlsHtml(); } }).catch(() => {});
+  api('GET', '/api/tls').then(t => { S.tls = t; if (S.view === 'settings') { $('#tlsBox').innerHTML = tlsHtml(); } }).catch(() => {});
+}
+
+function bindAppSettings() {
+  $('.settings', app).addEventListener('click', async e => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'geo') {
+      if (!navigator.geolocation) { toast('This browser cannot share its location. Type it in instead.', true); return; }
+      navigator.geolocation.getCurrentPosition(pos => {
+        S.config.location = { lat: round4(pos.coords.latitude), lon: round4(pos.coords.longitude) };
+        commit(0); setTimeout(refreshMeta, 800);
+      }, () => toast('Location was blocked. Browsers only share it on https or localhost, so type it in instead.', true));
+    }
+    if (act === 'regen') {
+      if (!confirm('Make a new webhook key? The old webhook addresses stop working until you update them in your media server.')) return;
+      try { const c = await api('POST', '/api/webhook-token/regenerate'); S.config.webhookToken = c.webhookToken; await refreshMeta(); toast('New key made. Update the webhook address in your media server (Connections shows it).'); } catch (err) { toast(err.message, true); }
+    }
+  });
+  const locInput = () => {
+    const lat = $('#lat').value, lon = $('#lon').value;
+    S.config.location = { lat: lat === '' ? null : Number(lat), lon: lon === '' ? null : Number(lon) };
+    commit(800); setTimeout(refreshMeta, 1600);
+  };
+  $('#lat').addEventListener('change', locInput);
+  $('#lon').addEventListener('change', locInput);
 }
 
 // ---- saved versions ----
@@ -2227,24 +2273,7 @@ function bindConnections() {
       renderConnections();
       return;
     }
-    if (act === 'geo') {
-      if (!navigator.geolocation) { toast('This browser cannot share its location. Type it in instead.', true); return; }
-      navigator.geolocation.getCurrentPosition(pos => {
-        S.config.location = { lat: round4(pos.coords.latitude), lon: round4(pos.coords.longitude) };
-        commit(0); setTimeout(refreshMeta, 800);
-      }, () => toast('Location was blocked. Browsers only share it on https or localhost, so type it in instead.', true));
-    }
-    if (act === 'regen') {
-      try { const c = await api('POST', '/api/webhook-token/regenerate'); S.config.webhookToken = c.webhookToken; await refreshMeta(); toast('New key made. Update the webhook address in your media server.'); } catch (err) { toast(err.message, true); }
-    }
   });
-  const locInput = () => {
-    const lat = $('#lat').value, lon = $('#lon').value;
-    S.config.location = { lat: lat === '' ? null : Number(lat), lon: lon === '' ? null : Number(lon) };
-    commit(800); setTimeout(refreshMeta, 1600);
-  };
-  $('#lat').addEventListener('change', locInput);
-  $('#lon').addEventListener('change', locInput);
 }
 function bioSectionHtml() {
   if (!bio) return '';
@@ -2291,7 +2320,7 @@ function bindAccount() {
     } catch (err) { toast(err.message, true); }
     btn.disabled = false;
   });
-  $('#conn-account')?.addEventListener('click', async e => {
+  $('#set-account')?.addEventListener('click', async e => {
     if (e.target.closest('[data-act="bio-off"]')) {
       await bio.disable();
       toast('Fingerprint or face sign-in is off for this phone.');
@@ -2459,6 +2488,7 @@ const round4 = v => Math.round(v * 1e4) / 1e4;
 async function refreshMeta() {
   try { S.meta = await api('GET', '/api/meta'); } catch { return; }
   if (S.view === 'connections') renderConnections();
+  else if (S.view === 'settings') renderSettings();
 }
 
 // ---------------------------------------------------------------------------

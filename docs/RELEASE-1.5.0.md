@@ -14,7 +14,7 @@ See [Installing Photon](https://github.com/vladdemorcy/photon/blob/main/docs/INS
 - The password is stored only as a salted scrypt hash, in its own file. Passwords need 10 characters, and very common ones are refused. Wrong passwords are slowed down, and five in a row lock that device out for 15 minutes.
 - Without a password yet (running Photon by hand, or the Android app), Photon asks for one together with a one-time setup code that only someone with access to that computer or phone can read. The Android app fills the code in for you.
 - **Fingerprint or face in the Android app:** after signing in with the password once, the app can use the phone's fingerprint or face instead. The key it uses only unlocks after a strong biometric match (Android's keystore enforces it), only works on that phone, and turns off when a fingerprint or face is added, the password changes or everyone is signed out. Android 9 or newer.
-- **Connections > Password and sign-in** changes the password (which signs out every other device) or signs out everywhere.
+- **Settings > Password and sign-in** changes the password (which signs out every other device) or signs out everywhere.
 
 **Other protection**
 - Keys and tokens (Plex, lights, TVs) stay on the server. The page only sees that one is saved.
@@ -26,7 +26,7 @@ See [Installing Photon](https://github.com/vladdemorcy/photon/blob/main/docs/INS
 - Updated packages (ws, node-forge). npm still lists one advisory for node-forge's RSA signature checking, which has no fix yet. Photon never checks signatures with node-forge (it only uses it to make its HTTPS certificates and read .pfx files), so it doesn't affect Photon.
 
 **Also new**
-- **Download settings** under Connections > Saved versions saves everything, keys included, after you type your password. Use it to move Photon to another computer or phone.
+- **Download settings** under Settings > Saved versions saves everything, keys included, after you type your password. Use it to move Photon to another computer or phone.
 
 **If you use scripts or tools with Photon:** changes now need a signed-in session. Webhooks from Plex, Jellyfin and Emby keep working as before. `UI_PASSWORD` becomes the sign-in password the first time, if it's long enough.
 

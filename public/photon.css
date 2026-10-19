@@ -104,7 +104,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
-.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.sr-only { position: absolute; width: 1px !important; height: 1px !important; padding: 0 !important; border: 0 !important; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---- Top bar ---- */
 .top {
@@ -444,6 +444,8 @@ input.kelvin { --track: var(--kelvin); }
 .conn { display: grid; gap: 28px; max-width: 980px; }
 .conn > section > header { margin-bottom: 12px; }
 .conn > section > header p { color: var(--muted); font-size: 14px; max-width: 70ch; }
+.settings-head h1 { margin-bottom: 4px; }
+.settings-head p { color: var(--muted); font-size: 14px; max-width: 70ch; }
 .sys { border-left: 3px solid var(--c); }
 .sys + .sys { margin-top: 10px; }
 .sys-head { display: flex; align-items: center; gap: 12px; padding: 14px 16px; cursor: pointer; }
@@ -673,13 +675,14 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
   .page-title { display: block; font-family: var(--font-display); font-weight: 600; font-size: 19px; letter-spacing: -.01em; white-space: nowrap; }
   .save-state.quiet { visibility: hidden; }
   .activity .section-head h1 { display: none; }
+  .settings-head { display: none; }
   body.pop-open { padding-bottom: calc(52vh + var(--tabbar)); }
   .save-state { order: 0; width: auto; margin: 0 0 0 auto; min-width: 0; max-width: 32vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
   .theme-switch button { width: 28px; height: 28px; }
 
   .tabs {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
     padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
     background: var(--header-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
     border-top: 1px solid var(--line);
