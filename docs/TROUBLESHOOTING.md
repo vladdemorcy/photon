@@ -17,6 +17,15 @@ On Android, the Photon app's main screen also says whether Photon is running and
   - Windows: `C:\ProgramData\Photon\logs\photon.log` (open Notepad as administrator to read it).
   - Mac: `sudo tail -f "/Library/Application Support/Photon/logs/photon.log"`.
 
+## Signing in
+
+- **Forgot the password:** on Windows or a Mac, run the installer again and choose a new one. Your rooms and settings stay. Running Photon by hand: `node src/password.js set`. On Android, see *Forgot your password?* in [Installing Photon](INSTALL.md).
+- **"Too many wrong tries":** after five wrong passwords in a row, that device has to wait 15 minutes. Other devices can still sign in.
+- **Signed out on a device you use often:** sessions end 30 days after you last used Photon on that device, and after 180 days in any case. Changing the password, or *Sign out everywhere*, also signs every other device out.
+- **It asks for a setup code:** Photon has no password yet. The code is printed when Photon starts and saved in the `setup-code` file next to its settings (`C:\ProgramData\Photon` on Windows, `/Library/Application Support/Photon` on a Mac, read it with `sudo cat`). The installers fill it in for you when they open Photon.
+- **"Photon only answers at this computer's own addresses":** you opened Photon by a name it doesn't know, such as a name from your router's DNS or a reverse proxy. Use its IP address, or add the name under **Connections > Secure connection (HTTPS) > Other names**. Photon refuses unknown names so that a website can't point its own name at your network and talk to Photon.
+- **A script or tool that used to change Photon's settings stopped working:** changes now need a signed-in session and the page's CSRF token. Webhooks from Plex, Jellyfin and Emby aren't affected, since they use their secret key instead.
+
 ## "Changes aren't being saved" banner
 
 Photon couldn't read its settings file, so it refuses to save over it (to protect your setup). Run the installer again; it repairs the settings folder's permissions. On Windows you can also run this in an admin PowerShell:

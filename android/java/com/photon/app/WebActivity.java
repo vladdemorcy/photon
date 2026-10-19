@@ -19,6 +19,11 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+
 /** Photon's own web page, shown inside the app. */
 public class WebActivity extends Activity {
     private static final int PICK_FILE = 7;
@@ -143,6 +148,28 @@ public class WebActivity extends Activity {
             runOnUiThread(new Runnable() {
                 @Override public void run() { WebActivity.this.openExternal(url); }
             });
+        }
+
+        /**
+         * Photon's one-time setup code, while it has no password yet. Photon writes it to its
+         * private settings folder, which only this app can read, so the person holding the
+         * phone is the one who chooses the password. Other devices need the code typed in.
+         */
+        @JavascriptInterface
+        public String setupCode() {
+            File data = new File(getFilesDir(), "data");
+            if (new File(data, "auth.json").exists()) return "";
+            File f = new File(data, "setup-code");
+            byte[] buf = new byte[64];
+            int n;
+            try (FileInputStream in = new FileInputStream(f)) {
+                n = in.read(buf);
+            } catch (IOException e) {
+                return "";
+            }
+            if (n <= 0) return "";
+            String code = new String(buf, 0, n, StandardCharsets.US_ASCII).trim();
+            return code.matches("[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}") ? code : "";
         }
     }
 

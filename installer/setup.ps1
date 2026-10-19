@@ -2,19 +2,27 @@
   Photon setup for Windows.
 
   Installs (or updates, or removes) Photon:
-    1. Checks for Node.js 18 or newer. If it's missing or too old, downloads the current
-       LTS installer from nodejs.org, checks it against nodejs.org's SHA-256 list, and
-       installs it silently to its default folder (C:\Program Files\nodejs).
-    2. Copies Photon, with its packages already included, to C:\Program Files\Photon.
-    3. Keeps settings in C:\ProgramData\Photon, readable only by SYSTEM and Administrators
-       (they hold sign-in tokens). Optionally brings over settings from an older copy.
-    4. Runs Photon as a Windows service (WinSW) that starts with Windows and restarts
-       itself if it stops unexpectedly.
-    5. Adds firewall rules for the local network, a Start menu entry and an entry in
+    1. Checks for Node.js 18 or newer in Program Files. If it's missing or too old, downloads
+       the current LTS installer from nodejs.org, checks it against nodejs.org's SHA-256 list,
+       and installs it silently to its default folder (C:\Program Files\nodejs). A node.exe
+       anywhere else (a user's own folder, say) is never used, since the service runs it.
+    2. Copies Photon, with its packages already included, to C:\Program Files\Photon, which
+       only administrators can change.
+    3. Keeps settings in C:\ProgramData\Photon, readable only by the Photon service, SYSTEM and
+       Administrators (they hold sign-in tokens). Optionally brings over settings from an
+       older copy.
+    4. Sets the password you sign in to Photon with. Only a salted scrypt hash is kept.
+    5. Runs Photon as a Windows service (WinSW) under the low-rights Local Service account,
+       with its own service identity. It starts with Windows and restarts itself if it stops
+       unexpectedly.
+    6. Adds firewall rules for the local network, a Start menu entry and an entry in
        Settings > Apps so it can be removed.
 
   Usually started by Photon-Setup.exe. Options:
-    -Quiet               install with no window, using the defaults or the options below
+    -Quiet               install with no window, using the defaults or the options below.
+                         Set the PHOTON_PASSWORD environment variable to choose the password;
+                         without it, an update keeps the current password and a new install
+                         prints a link with a one-time setup code for choosing one.
     -InstallDir <path>   where Photon goes (default C:\Program Files\Photon)
     -Port <number>       web page port (default 8787, or the current one when updating)
     -ImportFrom <path>   folder of an older Photon to bring settings over from
@@ -114,6 +122,18 @@ $Common = {
     return 'x86'
   }
 
+  # The service runs node.exe with the rights of a Windows service, so only a node.exe in a
+  # folder that only administrators can change will do. A copy in someone's user folder (from a
+  # version manager, say) could be swapped by any program that person runs.
+  function Test-TrustedNodePath([string]$Path) {
+    if (-not $Path) { return $false }
+    try { $full = [IO.Path]::GetFullPath($Path) } catch { return $false }
+    foreach ($root in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramW6432)) {
+      if ($root -and $full.StartsWith($root.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
+    }
+    return $false
+  }
+
   # The newest usable node.exe on this computer, or $null.
   function Get-NodeInfo {
     $candidates = New-Object System.Collections.Generic.List[string]
@@ -126,6 +146,7 @@ $Common = {
     if ($cmd) { $candidates.Add($cmd.Source) }
     $best = $null
     foreach ($p in ($candidates | Select-Object -Unique)) {
+      if (-not (Test-TrustedNodePath $p)) { continue }
       if (-not (Test-Path -LiteralPath $p)) { continue }
       try { $v = (& $p -v 2>$null | Select-Object -First 1) } catch { continue }
       if ("$v".Trim() -match '^v(\d+)\.(\d+)\.(\d+)') {
@@ -139,10 +160,29 @@ $Common = {
     if ($best) {
       try {
         $real = (& $best.Path -p 'process.execPath' 2>$null | Select-Object -First 1)
-        if ($real -and (Test-Path -LiteralPath "$real".Trim())) { $best.Path = "$real".Trim() }
+        $real = "$real".Trim()
+        if ($real -and (Test-TrustedNodePath $real) -and (Test-Path -LiteralPath $real)) { $best.Path = $real }
       } catch { }
     }
     return $best
+  }
+
+  # Setup locks the install folder so only administrators can change it, so it must be a
+  # folder of Photon's own: not a drive or a system folder, and either new, empty or an
+  # earlier Photon. Returns why not, or '' when it's fine.
+  function Test-InstallDir([string]$Dir) {
+    if (-not $Dir -or -not [IO.Path]::IsPathRooted($Dir)) { return 'Pick a full folder path, like C:\Program Files\Photon.' }
+    try { $full = [IO.Path]::GetFullPath($Dir).TrimEnd('\') } catch { return 'That folder path isn''t valid.' }
+    $system = @($env:SystemDrive, $env:windir, $env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:ProgramW6432, $env:ProgramData, $env:USERPROFILE, $(if ($env:USERPROFILE) { Split-Path $env:USERPROFILE }), $env:PUBLIC) |
+      Where-Object { $_ } | ForEach-Object { $_.TrimEnd('\') }
+    if ($full.Length -le 3 -or ($system | Where-Object { $_ -ieq $full })) { return "Photon needs a folder of its own, like $full\Photon." }
+    if ($full.StartsWith($env:windir.TrimEnd('\') + '\', [StringComparison]::OrdinalIgnoreCase)) { return 'Pick a folder outside the Windows folder.' }
+    if (Test-Path -LiteralPath $full) {
+      $ours = (Test-Path -LiteralPath (Join-Path $full 'app\src\server.js')) -or (Test-Path -LiteralPath (Join-Path $full 'Uninstall Photon.exe'))
+      $empty = -not (Get-ChildItem -LiteralPath $full -Force -ErrorAction SilentlyContinue | Select-Object -First 1)
+      if (-not $ours -and -not $empty) { return "$full already has other things in it. Pick an empty folder, or a new one like $full\Photon." }
+    }
+    return ''
   }
 
   function Get-Existing {
@@ -266,6 +306,35 @@ $InstallWork = {
     } finally { $out.Dispose(); $in.Dispose(); $resp.Dispose() }
   }
 
+  # Hands the password to Photon's password tool on its standard input as UTF-8, so it never
+  # appears on a command line, in the environment or in a file. The tool stores only a hash.
+  function Set-PhotonPassword([string]$NodePath, [string]$Tool, [string]$Password) {
+    $psi = New-Object Diagnostics.ProcessStartInfo
+    $psi.FileName = $NodePath
+    $psi.Arguments = "`"$Tool`" set"
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardInput = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $psi.EnvironmentVariables['CONFIG_PATH'] = Join-Path $DataDir 'config.json'
+    $p = [Diagnostics.Process]::Start($psi)
+    $outTask = $p.StandardOutput.ReadToEndAsync()
+    $errTask = $p.StandardError.ReadToEndAsync()
+    $bytes = (New-Object Text.UTF8Encoding $false).GetBytes($Password)
+    try {
+      $p.StandardInput.BaseStream.Write($bytes, 0, $bytes.Length)
+      $p.StandardInput.BaseStream.Flush()
+    } finally {
+      [Array]::Clear($bytes, 0, $bytes.Length)
+      $p.StandardInput.Close()
+    }
+    if (-not $p.WaitForExit(120000)) { try { $p.Kill() } catch { }; throw 'The password tool didn''t finish.' }
+    $out = "$($outTask.Result)".Trim(); $err = "$($errTask.Result)".Trim()
+    if ($out) { Write-SetupLog "  $out" }
+    if ($p.ExitCode -ne 0) { throw $(if ($err) { $err } else { "The password tool stopped with code $($p.ExitCode)." }) }
+  }
+
   try {
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
     try { [Net.WebRequest]::DefaultWebProxy.Credentials = [Net.CredentialCache]::DefaultNetworkCredentials } catch { }
@@ -317,12 +386,22 @@ $InstallWork = {
 
     # 2. Files ---------------------------------------------------------------
     Set-Step files active 'Copying Photon'
+    $dirProblem = Test-InstallDir $o.InstallDir
+    if ($dirProblem) { throw $dirProblem }
     Stop-PhotonService
     Copy-Folder (Join-Path $o.Payload 'app') $app
     New-Item -ItemType Directory -Force -Path $svcDir | Out-Null
     Copy-Item -LiteralPath (Join-Path $o.Payload 'service\WinSW.NET461.exe') -Destination $svcExe -Force
     Copy-Folder (Join-Path $o.Payload 'installer') (Join-Path $o.InstallDir 'installer')
     Copy-Item -LiteralPath (Join-Path $o.Payload 'Uninstall Photon.exe') -Destination (Join-Path $o.InstallDir 'Uninstall Photon.exe') -Force
+    # Only administrators may change Photon's program files, wherever they are: the service runs
+    # them. (A folder like C:\Photon would otherwise let any signed-in user edit them.)
+    $own = & takeown.exe /F $o.InstallDir /R /A /D Y 2>&1
+    if ($LASTEXITCODE -ne 0) { Write-SetupLog "  takeown: $($own -join ' ')" }
+    $acl = & icacls.exe $o.InstallDir /inheritance:r /grant:r '*S-1-5-18:(OI)(CI)F' '*S-1-5-32-544:(OI)(CI)F' '*S-1-5-32-545:(OI)(CI)RX' /C /Q 2>&1
+    if ($LASTEXITCODE -ne 0) { Write-SetupLog "  icacls: $($acl -join ' ')" }
+    $kids = & icacls.exe (Join-Path $o.InstallDir '*') /reset /T /C /Q 2>&1
+    if ($LASTEXITCODE -ne 0) { Write-SetupLog "  icacls reset: $($kids -join ' ')" }
     Set-Step files done $o.InstallDir
 
     # 3. Settings ------------------------------------------------------------
@@ -347,7 +426,8 @@ $InstallWork = {
     } elseif (-not (Test-Path -LiteralPath (Join-Path $DataDir 'config.json'))) {
       $note = 'Starting fresh'
     }
-    # Only SYSTEM (the service) and Administrators can read settings: they hold sign-in tokens.
+    # Only the Photon service, SYSTEM and Administrators can read settings: they hold sign-in
+    # tokens and the password hash. (The service's own access is added once the service exists.)
     # Lock the folder itself, then have everything inside simply inherit from it. (Earlier versions
     # applied the folder rule to each file with /T, which left existing files with no usable
     # permissions at all, so Photon could no longer read its own settings. This also repairs that.)
@@ -362,6 +442,24 @@ $InstallWork = {
       try { [void][IO.File]::ReadAllText($cfgFile) } catch { Write-SetupLog "  settings file still can't be read: $($_.Exception.Message)" }
     }
     Set-Step settings done $note
+
+    # 3b. Password -------------------------------------------------------------
+    Set-Step password active
+    $authFile = Join-Path $DataDir 'auth.json'
+    if ($o.Password) {
+      try {
+        Set-PhotonPassword $node.Path (Join-Path $app 'src\password.js') $o.Password
+        Set-Step password done 'Your new password is set'
+      } catch {
+        Set-Step password skipped "Not set: $($_.Exception.Message) Photon asks for one when it opens."
+      }
+    } elseif (Test-Path -LiteralPath $authFile) {
+      Set-Step password done 'Kept your current password'
+    } else {
+      Set-Step password skipped 'You choose one when Photon opens'
+    }
+    $o.Password = $null
+    $sync.Options.Password = $null
 
     # 4. Service -------------------------------------------------------------
     Set-Step service active 'Setting up the Photon service'
@@ -395,7 +493,25 @@ $InstallWork = {
     [IO.File]::WriteAllText((Join-Path $svcDir 'PhotonService.xml'), $xml, [Text.UTF8Encoding]::new($false))
     & $svcExe install 2>&1 | ForEach-Object { Write-SetupLog "  $_" }
     if (-not (Get-Service -Name $ServiceId -ErrorAction SilentlyContinue)) { throw 'Windows didn''t accept the Photon service. The setup log has the details.' }
-    Set-Step service done 'Starts with Windows, restarts itself if it stops'
+
+    # Run as Local Service, Windows' low-rights service account, instead of SYSTEM. With its own
+    # service identity (NT SERVICE\Photon) it can read Photon's settings while other services
+    # running as Local Service can't, and it keeps only the privileges it needs.
+    $wmi = Get-CimInstance Win32_Service -Filter "Name='$ServiceId'"
+    $chg = Invoke-CimMethod -InputObject $wmi -MethodName Change -Arguments @{ StartName = 'NT AUTHORITY\LocalService'; StartPassword = '' }
+    if ($chg.ReturnValue -ne 0) { throw "Windows wouldn't set the Photon service to run as Local Service (code $($chg.ReturnValue))." }
+    & sc.exe sidtype $ServiceId unrestricted 2>&1 | ForEach-Object { Write-SetupLog "  $_" }
+    & sc.exe privs $ServiceId 'SeChangeNotifyPrivilege/SeCreateGlobalPrivilege' 2>&1 | ForEach-Object { Write-SetupLog "  $_" }
+    $svcSid = $null
+    try { $svcSid = (New-Object Security.Principal.NTAccount "NT SERVICE\$ServiceId").Translate([Security.Principal.SecurityIdentifier]).Value } catch { }
+    if (-not $svcSid) { $svcSid = 'S-1-5-19'; Write-SetupLog '  No service identity found, giving Local Service access instead' }
+    $acl = & icacls.exe $DataDir /grant "*$($svcSid):(OI)(CI)M" /C /Q 2>&1
+    if ($LASTEXITCODE -ne 0) { throw "Couldn't give the Photon service access to its settings. $($acl -join ' ')" }
+    $acl = & icacls.exe $o.InstallDir /grant "*$($svcSid):(OI)(CI)RX" /C /Q 2>&1
+    if ($LASTEXITCODE -ne 0) { Write-SetupLog "  icacls: $($acl -join ' ')" }
+    $account = (Get-CimInstance Win32_Service -Filter "Name='$ServiceId'").StartName
+    Write-SetupLog "  Service account: $account, service identity $svcSid"
+    Set-Step service done 'Runs as Local Service, starts with Windows'
 
     # 5. Firewall ------------------------------------------------------------
     $httpsPort = 8443
@@ -476,9 +592,19 @@ $InstallWork = {
     }
     Set-Step start done "Running on port $($o.Port)"
 
+    # No password yet: Photon made a one-time setup code. Opening Photon from the last page
+    # passes it along, so the person who just installed it is the one who picks the password.
+    $setupCode = $null
+    if (-not (Test-Path -LiteralPath $authFile)) {
+      for ($i = 0; $i -lt 10 -and -not $setupCode; $i++) {
+        try { $setupCode = ([IO.File]::ReadAllText((Join-Path $DataDir 'setup-code'))).Trim() } catch { Start-Sleep -Milliseconds 300 }
+      }
+      if ($setupCode) { Write-SetupLog "Photon has no password yet. Its setup code is in $DataDir\setup-code" }
+    }
+
     $public = @()
     try { $public = @(Get-NetConnectionProfile -ErrorAction Stop | Where-Object { $_.NetworkCategory -eq 'Public' } | Select-Object -ExpandProperty Name) } catch { }
-    $sync.Result = @{ Ok = $true; Port = $o.Port; Lan = @(Get-LanAddresses); PublicNetworks = $public; Firewall = $o.Firewall }
+    $sync.Result = @{ Ok = $true; Port = $o.Port; Lan = @(Get-LanAddresses); PublicNetworks = $public; Firewall = $o.Firewall; SetupCode = $setupCode; HasPassword = (Test-Path -LiteralPath $authFile) }
   } catch {
     $msg = $_.Exception.Message
     Write-SetupLog "FAILED: $msg"
@@ -584,26 +710,56 @@ function Start-Work([hashtable]$Options) {
   $script:WorkPs = $ps
 }
 
-function New-InstallOptions([string]$Dir, [int]$PortNumber, [bool]$Firewall, [string]$Import, [bool]$DesktopIcon = $true) {
+function New-InstallOptions([string]$Dir, [int]$PortNumber, [bool]$Firewall, [string]$Import, [bool]$DesktopIcon = $true, [string]$Password = '') {
   @{
     Mode = 'install'; Version = $Version; Payload = $Payload; InstallDir = $Dir.TrimEnd('\')
     Port = $PortNumber; Firewall = $Firewall; ImportFrom = $Import; DesktopIcon = $DesktopIcon
     OldPort = [int]$(if ($existing.Port) { $existing.Port } else { 0 })
+    Password = $Password
   }
 }
 
+# The same password rules Photon uses (src/password-policy.json). Returns what's wrong, or ''.
+$PasswordPolicy = $null
+try { $PasswordPolicy = Get-Content -LiteralPath (Join-Path $Payload 'app\src\password-policy.json') -Raw -Encoding UTF8 | ConvertFrom-Json } catch { }
+if (-not $PasswordPolicy) { $PasswordPolicy = [pscustomobject]@{ minLength = 10; maxLength = 256; sequences = @(); common = @() } }
+function Test-PhotonPassword([string]$Password) {
+  $p = if ($Password) { $Password.Normalize([Text.NormalizationForm]::FormKC) } else { '' }
+  if ($p.Length -lt $PasswordPolicy.minLength) { return "Use at least $($PasswordPolicy.minLength) characters. A few words together make a strong password that's easy to remember." }
+  if ($p.Length -gt $PasswordPolicy.maxLength) { return "Use at most $($PasswordPolicy.maxLength) characters." }
+  $lower = $p.ToLowerInvariant()
+  $repeat = $p -cmatch '^(.)\1+$'
+  $run = @($PasswordPolicy.sequences | Where-Object { $_.Contains($lower) }).Count -gt 0
+  if ($repeat -or $run -or ($PasswordPolicy.common -contains $lower)) { return 'That password is too common or too easy to guess. Pick something else.' }
+  return ''
+}
+$HasPassword = Test-Path -LiteralPath (Join-Path $DataDir 'auth.json')
+
 # ---------------------------------------------------------------------------
-# No window: for scripted installs.
+# No window: for scripted installs. The password comes from the PHOTON_PASSWORD environment
+# variable (never a command line option, since other programs can read command lines).
 if ($Quiet) {
   Remove-Item -LiteralPath $sync.LogFile -Force -ErrorAction SilentlyContinue
   if ($Mode -eq 'uninstall') {
     $sync.Options = @{ InstallDir = $existing.InstallDir; DeleteData = [bool]$DeleteData; OldPort = [int]$(if ($existing.Port) { $existing.Port } else { 0 }) }
   } else {
-    $sync.Options = New-InstallOptions $defaultDir $defaultPort (-not $NoFirewall) $ImportFrom ($existing.DesktopIcon -and -not $NoDesktopIcon)
+    $quietPassword = "$env:PHOTON_PASSWORD"
+    Remove-Item -LiteralPath Env:PHOTON_PASSWORD -ErrorAction SilentlyContinue
+    if ($quietPassword) {
+      $why = Test-PhotonPassword $quietPassword
+      if ($why) { Write-Output "PHOTON_PASSWORD wasn't used: $why"; exit 1 }
+    }
+    $dirProblem = Test-InstallDir $defaultDir
+    if ($dirProblem) { Write-Output $dirProblem; exit 1 }
+    $sync.Options = New-InstallOptions $defaultDir $defaultPort (-not $NoFirewall) $ImportFrom ($existing.DesktopIcon -and -not $NoDesktopIcon) $quietPassword
+    $quietPassword = $null
   }
   $body = if ($Mode -eq 'uninstall') { $UninstallWork } else { $InstallWork }
   . $body
   while ($sync.Log.Count) { $l = $null; if ($sync.Log.TryDequeue([ref]$l)) { Write-Output $l } }
+  if ($sync.Result.Ok -and $sync.Result.SetupCode) {
+    Write-Output "Photon has no password yet. Open http://localhost:$($sync.Result.Port)/#setup=$($sync.Result.SetupCode) on this computer to choose one."
+  }
   if ($sync.Result.Ok) { exit 0 } else { exit 1 }
 }
 
@@ -728,6 +884,32 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
       <Setter Property="Template">
         <Setter.Value>
           <ControlTemplate TargetType="TextBox">
+            <Border x:Name="b" CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+              <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" Focusable="False"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="b" Property="BorderBrush" Value="{DynamicResource Cyan}"/></Trigger>
+              <Trigger Property="IsEnabled" Value="False"><Setter TargetName="b" Property="Opacity" Value="0.5"/></Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="PasswordBox">
+      <Setter Property="FontFamily" Value="{DynamicResource UiFont}"/>
+      <Setter Property="FontSize" Value="14"/>
+      <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource Text}"/>
+      <Setter Property="SelectionBrush" Value="{DynamicResource Cyan}"/>
+      <Setter Property="Background" Value="{DynamicResource Inset}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Line2}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="10,8"/>
+      <Setter Property="VerticalContentAlignment" Value="Center"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="PasswordBox">
             <Border x:Name="b" CornerRadius="8" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
               <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="{TemplateBinding VerticalContentAlignment}" Focusable="False"/>
             </Border>
@@ -895,6 +1077,29 @@ Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, Sys
                 <TextBlock x:Name="ImportHint" Text="Pick the folder you unzipped Photon into before. Leave it empty to start fresh." Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="0,6,0,0" TextWrapping="Wrap"/>
               </StackPanel>
               <TextBlock x:Name="KeepNote" Visibility="Collapsed" Margin="0,18,0,0" Foreground="{DynamicResource Muted}" FontSize="13" TextWrapping="Wrap"/>
+            </StackPanel>
+
+            <!-- Password -->
+            <StackPanel x:Name="PagePassword" Visibility="Collapsed">
+              <TextBlock Text="Choose a password for Photon" FontFamily="{DynamicResource DisplayFont}" FontWeight="SemiBold" FontSize="24" Margin="0,4,0,8"/>
+              <TextBlock Foreground="{DynamicResource Muted}" FontSize="14" TextWrapping="Wrap" LineHeight="20"
+                         Text="You sign in to Photon with it, on this computer and from your phone or other devices. A few words together make a strong password that's easy to remember."/>
+              <CheckBox x:Name="ChkKeepPw" Style="{StaticResource Toggle}" Margin="0,20,0,0" Visibility="Collapsed">
+                <StackPanel>
+                  <TextBlock Text="Keep my current password"/>
+                  <TextBlock Text="Turn this off to choose a new one. Everyone signed in to Photon then has to sign in again." Foreground="{DynamicResource Muted}" FontSize="12.5" Margin="0,2,0,0" TextWrapping="Wrap"/>
+                </StackPanel>
+              </CheckBox>
+              <StackPanel x:Name="PwFields" Margin="0,20,0,0">
+                <TextBlock Text="Password" Foreground="{DynamicResource Muted}" FontSize="13" Margin="0,0,0,6"/>
+                <PasswordBox x:Name="Pw1" MaxLength="256"/>
+                <TextBlock Text="Type it again" Foreground="{DynamicResource Muted}" FontSize="13" Margin="0,16,0,6"/>
+                <PasswordBox x:Name="Pw2" MaxLength="256"/>
+                <TextBlock x:Name="PwStatus" FontSize="12.5" Margin="0,10,0,0" TextWrapping="Wrap" Foreground="{DynamicResource Faint}"
+                           Text="At least 10 characters."/>
+              </StackPanel>
+              <TextBlock Foreground="{DynamicResource Faint}" FontSize="12.5" Margin="0,18,0,0" TextWrapping="Wrap" LineHeight="18"
+                         Text="Photon keeps only a scrambled form of it (a salted scrypt hash), so nobody can read it back. Forgot it? Run Photon setup again and choose a new one."/>
             </StackPanel>
 
             <!-- Remove (uninstall) -->
@@ -1068,7 +1273,7 @@ function Add-PlanRow([string]$Glyph, [string]$Title, [string]$Detail, [string]$G
 }
 
 # Sidebar steps
-$sideLabels = if ($Mode -eq 'uninstall') { @('Remove', 'Removing', 'Done') } else { @('Welcome', 'Options', 'Install', 'Done') }
+$sideLabels = if ($Mode -eq 'uninstall') { @('Remove', 'Removing', 'Done') } else { @('Welcome', 'Options', 'Password', 'Install', 'Done') }
 $sideRows = @()
 for ($i = 0; $i -lt $sideLabels.Count; $i++) {
   $g = New-Object Windows.Controls.Grid
@@ -1112,7 +1317,7 @@ function Set-SideStep([int]$Index) {
 $stepDefs = if ($Mode -eq 'uninstall') {
   [ordered]@{ service = 'Stop and remove the Photon service'; firewall = 'Remove firewall rules'; files = 'Remove Photon''s files'; shortcuts = 'Remove Start menu, desktop and Settings entries'; settings = 'Your rooms and settings' }
 } else {
-  [ordered]@{ node = 'Check for Node.js'; download = 'Download Node.js'; nodeinstall = 'Install Node.js'; files = 'Copy Photon'; settings = 'Set up your settings'; service = 'Install the Photon service'; firewall = 'Open the firewall for your network'; shortcuts = 'Add Start menu and desktop shortcuts'; start = 'Start Photon' }
+  [ordered]@{ node = 'Check for Node.js'; download = 'Download Node.js'; nodeinstall = 'Install Node.js'; files = 'Copy Photon'; settings = 'Set up your settings'; password = 'Set your password'; service = 'Install the Photon service'; firewall = 'Open the firewall for your network'; shortcuts = 'Add Start menu and desktop shortcuts'; start = 'Start Photon' }
 }
 $stepRows = @{}
 foreach ($id in $stepDefs.Keys) {
@@ -1153,19 +1358,20 @@ function Update-Steps {
 }
 
 # ---- pages -------------------------------------------------------------------------
-$pages = 'PageWelcome', 'PageOptions', 'PageRemove', 'PageProgress', 'PageDone'
+$pages = 'PageWelcome', 'PageOptions', 'PagePassword', 'PageRemove', 'PageProgress', 'PageDone'
 function Show-Page([string]$Name) {
   foreach ($p in $pages) { $ui[$p].Visibility = if ($p -eq $Name) { 'Visible' } else { 'Collapsed' } }
   $script:Page = $Name
   $ui.FooterNote.Text = ''
   switch ($Name) {
     'PageWelcome' { Set-SideStep 0; $ui.BtnBack.Content = 'Cancel'; $ui.BtnBack.Visibility = 'Visible'; $ui.BtnNext.Content = 'Next' }
-    'PageOptions' { Set-SideStep 1; $ui.BtnBack.Content = 'Back'; $ui.BtnBack.Visibility = 'Visible'; $ui.BtnNext.Content = $(if ($existing.Installed) { 'Update' } else { 'Install' }); Update-PortStatus }
+    'PageOptions' { Set-SideStep 1; $ui.BtnBack.Content = 'Back'; $ui.BtnBack.Visibility = 'Visible'; $ui.BtnNext.Content = 'Next'; Update-PortStatus }
+    'PagePassword' { Set-SideStep 2; $ui.BtnBack.Content = 'Back'; $ui.BtnBack.Visibility = 'Visible'; $ui.BtnNext.Content = $(if ($existing.Installed) { 'Update' } else { 'Install' }); Update-PwStatus }
     'PageRemove' { Set-SideStep 0; $ui.BtnBack.Content = 'Cancel'; $ui.BtnBack.Visibility = 'Visible'; $ui.BtnNext.Content = 'Remove' }
-    'PageProgress' { Set-SideStep $(if ($Mode -eq 'uninstall') { 1 } else { 2 }); $ui.BtnBack.Visibility = 'Collapsed'; $ui.BtnNext.IsEnabled = $false; $ui.BtnNext.Content = 'Working'; $ui.BtnClose.IsEnabled = $false }
-    'PageDone' { Set-SideStep $(if ($Mode -eq 'uninstall') { 2 } else { 3 }); $ui.BtnNext.IsEnabled = $true; $ui.BtnClose.IsEnabled = $true }
+    'PageProgress' { Set-SideStep $(if ($Mode -eq 'uninstall') { 1 } else { 3 }); $ui.BtnBack.Visibility = 'Collapsed'; $ui.BtnNext.IsEnabled = $false; $ui.BtnNext.Content = 'Working'; $ui.BtnClose.IsEnabled = $false }
+    'PageDone' { Set-SideStep $(if ($Mode -eq 'uninstall') { 2 } else { 4 }); $ui.BtnNext.IsEnabled = $true; $ui.BtnClose.IsEnabled = $true }
   }
-  $ui.BtnNext.Focus() | Out-Null
+  if ($Name -eq 'PagePassword' -and $ui.PwFields.Visibility -eq 'Visible') { $ui.Pw1.Focus() | Out-Null } else { $ui.BtnNext.Focus() | Out-Null }
 }
 
 # Welcome
@@ -1183,6 +1389,7 @@ if ($Mode -eq 'install') {
   Add-PlanRow ([string][char]0xE7B8) $(if ($existing.Installed) { 'Replace the Photon files' } else { 'Install Photon' }) 'Everything Photon needs is included, nothing else to download.'
   Add-PlanRow ([string][char]0xE912) 'Run Photon as a Windows service' 'It starts with your computer and keeps running when nobody is signed in.'
   if ($existing.HasSettings) { Add-PlanRow ([string][char]0xE72E) 'Keep your rooms and settings' "They stay in $DataDir." 'Ok' }
+  Add-PlanRow ([string][char]0xE72E) $(if ($HasPassword) { 'Keep or change your password' } else { 'Choose your sign-in password' }) 'You sign in to Photon with it from any device.'
 } else {
   $ui.DeleteHint.Text = "Leave this off to keep them in $DataDir, in case you install Photon again."
 }
@@ -1233,6 +1440,35 @@ $ui.BtnFreePort.Add_Click({
   }
   Update-PortStatus
 })
+
+# Password
+if ($HasPassword) {
+  $ui.ChkKeepPw.Visibility = 'Visible'
+  $ui.ChkKeepPw.IsChecked = $true
+  $ui.PwFields.Visibility = 'Collapsed'
+}
+$ui.ChkKeepPw.Add_Click({
+  $ui.PwFields.Visibility = if ($ui.ChkKeepPw.IsChecked) { 'Collapsed' } else { 'Visible' }
+  if (-not $ui.ChkKeepPw.IsChecked) { $ui.Pw1.Focus() | Out-Null }
+  $ui.FooterNote.Text = ''
+})
+function Update-PwStatus {
+  $a = $ui.Pw1.Password; $b = $ui.Pw2.Password
+  $why = Test-PhotonPassword $a
+  $text = 'At least 10 characters.'; $brush = 'Faint'
+  if ($a) {
+    if ($why) { $text = $why; $brush = $(if ($a.Length -lt $PasswordPolicy.minLength) { 'Faint' } else { 'Warn' }) }
+    elseif (-not $b) { $text = 'Good. Now type it again.'; $brush = 'Ok' }
+    elseif ($a -cne $b) { $text = 'The two passwords are different.'; $brush = $(if ($b.Length -ge $a.Length) { 'Bad' } else { 'Faint' }) }
+    else { $text = 'Passwords match.'; $brush = 'Ok' }
+  }
+  $ui.PwStatus.Text = $text
+  $ui.PwStatus.SetResourceReference([Windows.Controls.TextBlock]::ForegroundProperty, $brush)
+}
+$ui.Pw1.Add_PasswordChanged({ Update-PwStatus; $ui.FooterNote.Text = '' })
+$ui.Pw2.Add_PasswordChanged({ Update-PwStatus; $ui.FooterNote.Text = '' })
+$ui.Pw1.Add_KeyDown({ param($s, $e) if ($e.Key -eq 'Return') { $ui.Pw2.Focus() | Out-Null; $e.Handled = $true } })
+$ui.Pw2.Add_KeyDown({ param($s, $e) if ($e.Key -eq 'Return') { $ui.BtnNext.RaiseEvent((New-Object Windows.RoutedEventArgs ([Windows.Controls.Button]::ClickEvent))); $e.Handled = $true } })
 
 function Select-Folder([string]$Description, [string]$Start) {
   $d = New-Object System.Windows.Forms.FolderBrowserDialog
@@ -1310,7 +1546,8 @@ function Show-Result {
       $ui.BtnNext.Content = 'Close'
     } else {
       $ui.DoneTitle.Text = 'Photon is running'
-      $ui.DoneText.Text = 'It runs in the background as a Windows service, so it starts with your computer. Open it from the Start menu, or from any device on your network:'
+      $ui.DoneText.Text = 'It runs in the background as a Windows service, so it starts with your computer. Open it from the Start menu, or from any device on your network, and sign in with your password:'
+      if ($r.SetupCode) { $ui.DoneText.Text = 'It runs in the background as a Windows service, so it starts with your computer. Click Open Photon to choose your password, then open it from the Start menu or any device on your network:' }
       Add-UrlRow 'On this computer' "http://localhost:$($r.Port)/"
       foreach ($ip in ($r.Lan | Select-Object -First 3)) { Add-UrlRow 'From other devices' "http://$($ip):$($r.Port)/" }
       if ($r.PublicNetworks -and $r.Firewall) {
@@ -1347,6 +1584,7 @@ $win.Add_KeyDown({ param($s, $e) if ($e.Key -eq 'Escape' -and $script:Page -ne '
 $ui.BtnBack.Add_Click({
   switch ($script:Page) {
     'PageOptions' { Show-Page 'PageWelcome' }
+    'PagePassword' { Show-Page 'PageOptions' }
     'PageDone' {
       if ($sync.Result -and -not $sync.Result.Ok) { Start-Process notepad.exe -ArgumentList "`"$script:LogPath`"" } else { $win.Close() }
     }
@@ -1360,16 +1598,31 @@ $ui.BtnNext.Add_Click({
     'PageOptions' {
       $dir = $ui.TxtDir.Text.Trim()
       $p = 0
-      if (-not $dir -or -not [IO.Path]::IsPathRooted($dir)) { $ui.FooterNote.Text = 'Pick a full folder path, like C:\Program Files\Photon.'; return }
+      $dirProblem = Test-InstallDir $dir
+      if ($dirProblem) { $ui.FooterNote.Text = $dirProblem; return }
       if (-not [int]::TryParse($ui.TxtPort.Text.Trim(), [ref]$p) -or $p -lt 1 -or $p -gt 65535) { $ui.FooterNote.Text = 'The port has to be a number from 1 to 65535.'; return }
       Update-PortStatus
       if ($script:PortOwner) { $ui.FooterNote.Text = "Port $p is in use. Stop that program or pick another port."; return }
       $import = $ui.TxtImport.Text.Trim()
       if ($ui.ImportBox.Visibility -eq 'Visible' -and $import -and -not (Find-PhotonData $import)) { $ui.FooterNote.Text = "No Photon settings found in $import."; return }
       if ($ui.ImportBox.Visibility -ne 'Visible') { $import = '' }
+      $script:Chosen = @{ Dir = $dir; Port = $p; Import = $import }
+      Show-Page 'PagePassword'
+    }
+    'PagePassword' {
+      $password = ''
+      if (-not ($HasPassword -and $ui.ChkKeepPw.IsChecked)) {
+        $why = Test-PhotonPassword $ui.Pw1.Password
+        if ($why) { $ui.FooterNote.Text = $why; $ui.Pw1.Focus() | Out-Null; return }
+        if ($ui.Pw1.Password -cne $ui.Pw2.Password) { $ui.FooterNote.Text = 'The two passwords are different.'; $ui.Pw2.Focus() | Out-Null; return }
+        $password = $ui.Pw1.Password
+      }
+      $c = $script:Chosen
       Remove-Item -LiteralPath $sync.LogFile -Force -ErrorAction SilentlyContinue
       Show-Page 'PageProgress'
-      Start-Work (New-InstallOptions $dir $p ([bool]$ui.ChkFirewall.IsChecked) $import ([bool]$ui.ChkDesktop.IsChecked))
+      Start-Work (New-InstallOptions $c.Dir $c.Port ([bool]$ui.ChkFirewall.IsChecked) $c.Import ([bool]$ui.ChkDesktop.IsChecked) $password)
+      $password = $null
+      $ui.Pw1.Clear(); $ui.Pw2.Clear()
       $timer.Start()
     }
     'PageRemove' {
@@ -1379,7 +1632,11 @@ $ui.BtnNext.Add_Click({
       $timer.Start()
     }
     'PageDone' {
-      if ($sync.Result.Ok -and $Mode -eq 'install') { Start-Process "http://localhost:$($sync.Result.Port)/" }
+      if ($sync.Result.Ok -and $Mode -eq 'install') {
+        $url = "http://localhost:$($sync.Result.Port)/"
+        if ($sync.Result.SetupCode) { $url += "#setup=$($sync.Result.SetupCode)" }
+        Start-Process $url
+      }
       $win.Close()
     }
   }
@@ -1397,7 +1654,8 @@ if ($PreviewPng) {
       Show-Page 'PageProgress'; Update-Steps
       $ui.ProgBar.Visibility = 'Visible'; $ui.ProgBar.Value = 46; $ui.ProgDetail.Text = 'Downloading Node.js v22.11.0 (Jod LTS)  12.3 of 26.6 MB'
     }
-    'PageDone' { $sync.Result = @{ Ok = $true; Port = 8787; Lan = @('192.168.1.60'); PublicNetworks = @(); Firewall = $true }; Show-Result }
+    'PageDone' { $sync.Result = @{ Ok = $true; Port = 8787; Lan = @('192.168.1.60'); PublicNetworks = @(); Firewall = $true; HasPassword = $true }; Show-Result }
+    'PagePassword' { Show-Page 'PagePassword'; $ui.Pw1.Password = 'movie night'; Update-PwStatus }
     'PageFail' {
       $sync.Steps['node'] = @{ State = 'done'; Note = 'Found Node.js v22.11.0' }
       $sync.Steps['files'] = @{ State = 'done'; Note = 'C:\Program Files\Photon' }

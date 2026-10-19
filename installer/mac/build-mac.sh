@@ -94,7 +94,11 @@ cat > "$WORK/flat/Distribution" <<XML
 XML
 
 rm -f "$OUT"
-(cd "$WORK/flat" && xar --compression none -cf "$OUT" Distribution Resources photon.pkg)
+if command -v xar >/dev/null 2>&1; then
+  (cd "$WORK/flat" && xar --compression none -cf "$OUT" Distribution Resources photon.pkg)
+else
+  pkgutil --flatten "$WORK/flat" "$OUT"   # a Mac without the xar tool
+fi
 echo
 echo "Built $OUT ($(du -h "$OUT" | cut -f1))"
 sha256sum "$OUT" 2>/dev/null | tee "$OUT.sha256" || shasum -a 256 "$OUT" | tee "$OUT.sha256"
