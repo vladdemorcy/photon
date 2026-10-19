@@ -1,0 +1,10 @@
+# Dependencies and build output
+node_modules/
+build/
+dist/
+
+# Your settings, sign-ins and certificates. Never commit these.
+data/
+*.log
+.DS_Store
+Thumbs.db
