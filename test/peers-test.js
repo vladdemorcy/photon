@@ -20,7 +20,10 @@ const get = async (base, cookie, p) => (await fetch(base + p, { headers: { Cooki
     pa = await get(a, ca, '/api/peers'); pb = await get(b, cb, '/api/peers');
   }
   ok(pa.length >= 1 && pb.length >= 1, `each Photon hears the other (${pa.length}, ${pb.length})`);
-  ok(pa[0] && pb[0] && pa[0].id !== pb[0].id, 'they have different IDs');
+  // Each lists the others but never itself, so A's list has B's ID (missing from B's list) and
+  // the other way round. Other Photons on the same machine or network may be listed too.
+  const ia = new Set(pa.map(p => p.id)), ib = new Set(pb.map(p => p.id));
+  ok([...ia].some(x => !ib.has(x)) && [...ib].some(x => !ia.has(x)), 'each lists the other, not itself');
   ok(!JSON.stringify(pa).match(/token|key|password/i), 'the announcement holds no keys');
   const log = await get(a, ca, '/api/log');
   ok(log.some(l => /Another Photon is running/.test(l.msg)), 'the Activity log notes it');
