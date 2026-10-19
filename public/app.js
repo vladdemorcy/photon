@@ -364,9 +364,37 @@ function render() {
   else if (S.view === 'activity') renderActivity();
   else renderRooms();
   settingsBanner();
+  peersBanner();
 }
 
 // Shown when Photon can't read its settings file and so won't save (see config.load on the server).
+// ---- Another Photon on the network --------------------------------------------------------
+// Two Photons react to the same players and set the same lights, so they undo each other.
+const PLATFORM_LABEL = { windows: 'Windows PC', mac: 'Mac', android: 'Android phone', linux: 'Linux computer' };
+async function pollPeers() {
+  if (!S.config) return;
+  try { S.peers = await api('GET', '/api/peers'); } catch { return; }
+  peersBanner();
+}
+function peersBanner() {
+  let el = $('#peersWarning');
+  let hidden = [];
+  try { hidden = JSON.parse(sessionStorage.getItem('photon.peersHidden') || '[]'); } catch { /* none */ }
+  const list = (S.peers || []).filter(p => !hidden.includes(p.id));
+  if (!list.length || !S.config) { el?.remove(); return; }
+  if (!el) { el = document.createElement('div'); el.id = 'peersWarning'; el.className = 'panel setup-strip peers-warning'; el.setAttribute('role', 'status'); app.before(el); }
+  const one = p => `<b>${esc(p.name)}</b> (${esc(PLATFORM_LABEL[p.platform] || 'another device')}, ${esc(p.address)}${p.version ? `, Photon ${esc(p.version)}` : ''})`;
+  const shared = [...new Set(list.flatMap(p => p.shared))].map(id => S.meta?.lighting.find(l => l.id === id)?.label || id);
+  el.innerHTML = `<span><b>${list.length === 1 ? 'Photon is also running on' : 'Photon is also running on these devices'}:</b> ${list.map(one).join(', ')}.
+    ${shared.length ? `Both use ${esc(shared.length > 1 ? `${shared.slice(0, -1).join(', ')} and ${shared.at(-1)}` : shared[0])} lights, so the lights will flicker between what each one decides.` : 'If both control the same lights, they\'ll undo each other.'}
+    Keep only one Photon running: stop or uninstall the other.</span><span class="spacer"></span>
+    <button class="btn sm" type="button" data-hide-peers>Hide for now</button>`;
+  el.querySelector('[data-hide-peers]').onclick = () => {
+    try { sessionStorage.setItem('photon.peersHidden', JSON.stringify([...hidden, ...list.map(p => p.id)])); } catch { /* no storage */ }
+    el.remove();
+  };
+}
+
 function settingsBanner() {
   let el = $('#settingsProblem');
   const msg = S.meta?.settingsProblem;
@@ -2606,6 +2634,8 @@ async function boot() {
   route();
   setSaveState('');
   setInterval(pollStatus, 4000);
+  pollPeers();
+  setInterval(pollPeers, 15000);
   setInterval(syncFromServer, 4000);
   setInterval(refreshPreview, 60000); // time windows move with the clock
 }

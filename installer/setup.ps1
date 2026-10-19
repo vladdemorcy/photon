@@ -526,6 +526,8 @@ $InstallWork = {
         -LocalPort @($o.Port, $httpsPort) -Profile Domain, Private -RemoteAddress LocalSubnet | Out-Null
       New-NetFirewallRule -DisplayName 'Photon: Govee light replies' -Group 'Photon' -Direction Inbound -Action Allow -Protocol UDP `
         -LocalPort 4002 -Profile Domain, Private -RemoteAddress LocalSubnet | Out-Null
+      New-NetFirewallRule -DisplayName 'Photon: finding other Photons' -Group 'Photon' -Direction Inbound -Action Allow -Protocol UDP `
+        -LocalPort 47883 -Profile Domain, Private -RemoteAddress LocalSubnet | Out-Null
       Set-Step firewall done "Ports $($o.Port) and $httpsPort, home network only"
     } else {
       Set-Step firewall skipped 'Turned off'

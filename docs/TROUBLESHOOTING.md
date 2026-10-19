@@ -45,6 +45,12 @@ Nothing is deleted on update. Go to **Settings > Saved versions** and restore th
 
 The details are saved in `%TEMP%\Photon-Setup-error.txt`. Run the installer again; if it still fails, that file says why.
 
+## "Photon is also running on" warning
+
+Photon found another copy of itself on your network, on the computer or phone it names. Two Photons both react to the same players and set the same lights, so the lights flicker or end up in the wrong state. Keep one: stop or uninstall the other (on Windows, Settings > Apps > Photon; on a Mac, Uninstall Photon in Applications > Utilities; on Android, Stop Photon in the app or uninstall it). The warning goes away about two minutes after the other one stops. *Hide for now* hides it in that browser until you close it.
+
+Photons find each other with a small broadcast on UDP port 47883 every 30 seconds. It holds no keys or settings, only the device's name, its kind, Photon's version and which lighting systems are turned on.
+
 ## Lights don't react when something plays
 
 1. Open **Activity** and start something playing.

@@ -620,6 +620,8 @@ app.get('/api/diagnostics', (req, res) => res.json({
   crashes: recentCrashes(), serviceLogs: serviceLogTail(),
 }));
 app.get('/api/status', (req, res) => res.json(engine.status()));
+// Other Photons heard on the network (see peers.js).
+app.get('/api/peers', (req, res) => res.json(peers.list()));
 app.get('/api/log', (req, res) => res.json(engine.log()));
 
 // Which behavior would run right now for each event, per room.
@@ -933,7 +935,15 @@ function listenWithRetry(tries = 0) {
 }
 listenWithRetry();
 
+// Other copies of Photon on the network (two of them fight over the same lights).
+const peers = require('./peers').create({
+  dataDir: DATA_DIR, version: VERSION, onPhone: ON_PHONE,
+  lights: () => Object.entries(cfg.get().lighting || {}).filter(([, c]) => c?.enabled).map(([k]) => k),
+  log: (level, msg) => engine.addLog(level, msg),
+});
+
 function onListening() {
+  if (!process.env.PHOTON_NO_PEERS) peers.start();
   try { fs.writeFileSync(INSTANCE_FILE, JSON.stringify({ pid: process.pid, port: PORT, version: VERSION, started: new Date(STARTED).toISOString() })); } catch { /* not important */ }
   console.log(`Photon ${VERSION} is running: http://localhost:${PORT}`);
   for (const ip of lanAddresses()) console.log(`  on your network: http://${ip}:${PORT}`);

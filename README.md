@@ -14,7 +14,7 @@ You can use more than one of each at the same time. A single room can mix Hue an
 
 ## Install on Windows (easiest)
 
-Run **Photon-Setup-1.5.3.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
+Run **Photon-Setup-1.5.4.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
 
 - **Node.js:** checks for Node.js 18 or newer. If it's missing or too old, setup downloads the current LTS version from nodejs.org, checks it against nodejs.org's published SHA-256 checksums, and installs it to `C:\Program Files\nodejs`.
 - **Photon:** installs Photon to `C:\Program Files\Photon`. Everything it needs is included.
@@ -30,7 +30,7 @@ To update, run a newer Photon-Setup the same way. To remove Photon, use Settings
 
 ```
 set PHOTON_PASSWORD=the password you want
-Photon-Setup-1.5.3.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
+Photon-Setup-1.5.4.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
 "C:\Program Files\Photon\Uninstall Photon.exe" -Quiet [-DeleteData]
 ```
 
@@ -40,7 +40,7 @@ Windows SmartScreen may warn that the installer is from an unknown publisher, be
 
 ## Install on a Mac
 
-Open **Photon-1.5.3.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
+Open **Photon-1.5.4.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
 
 - **Node.js:** downloads its own copy from nodejs.org the first time (checked against nodejs.org's checksums) and keeps it in `/Library/Photon/node`, so nothing else on your Mac changes.
 - **Photon:** installs to `/Library/Photon` and runs as a background service (a launchd daemon, `com.photon.server`). It starts with the Mac, keeps running when nobody is logged in, and restarts if it stops.
@@ -221,6 +221,8 @@ node src/password.js set
 **Android: only on the phone itself.** When Photon runs in the Android app, its page and settings only open in the app on that phone. Other devices on the network can reach the webhooks (which have their own secret key) and nothing else, so HTTPS isn't offered there.
 
 **Only its own addresses.** Photon answers at localhost, this computer's IP addresses, its name and `name.local`. A request for any other name is refused, which stops a trick called DNS rebinding, where a website points its own name at your network to talk to Photon. If you reach Photon by another name, such as `photon.home.lan` or a reverse proxy's name, add it under **Settings > Secure connection (HTTPS) > Other names**, or list it in `PHOTON_HOSTNAMES`.
+
+**Another Photon on the network.** Each Photon announces itself on the home network every 30 seconds (a UDP broadcast on port 47883, with no keys or settings in it) and shows a warning on every page while it hears another one, since two Photons fight over the same lights.
 
 **Webhooks** don't sign in. They're checked against their secret key before Photon reads anything else from the request.
 
