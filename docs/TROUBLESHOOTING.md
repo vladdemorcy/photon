@@ -5,6 +5,8 @@ Start with these two pages in Photon:
 - **Activity** shows every event Photon received and what it did, including errors.
 - **`http://<photon address>:8787/api/diagnostics`** shows the version, how long Photon has been running, recent crashes and the end of its log files.
 
+On Android, the Photon app's main screen also says whether Photon is running and what address to use.
+
 ## Photon won't open in the browser
 
 - **On the same computer**, try `http://localhost:8787`. If that works but other devices can't reach it, it's the firewall: on Windows, run the installer again with "Let other devices on my network open Photon" turned on; on a Mac, allow incoming connections for `node` in System Settings > Network > Firewall.
@@ -67,6 +69,17 @@ Open the TV's card under **Connections > Smart TVs**. It shows what each TV repo
 - **IKEA:** click *Pair*, then press the button on the bottom of the DIRIGERA hub within a minute.
 - **Lutron Caseta:** click *Pair*, then press the small black button on the back of the bridge.
 - **Treatlife / Smart Life:** if Photon says the Tuya plan expired, extend it at platform.tuya.com (Cloud > Cloud Services > IoT Core).
+
+## Android
+
+- **Photon stops when the screen turns off, or stops after a while:** in the Photon app, tap **Let Photon run in the background**. Some phones (Samsung, Xiaomi, OnePlus, Huawei) have their own battery savers on top of Android's. On Samsung, go to Settings > Battery > Background usage limits and make sure Photon isn't under *Sleeping apps* or *Deep sleeping apps*, then add it to *Never sleeping apps*. For other brands, look up your phone at dontkillmyapp.com.
+- **"Photon isn't answering" in the app:** it's restarting after a problem. Wait a minute. If it stays that way, tap **Stop Photon**, then **Start Photon**. If it keeps happening, open `/api/diagnostics` from a computer, or look in the app's notification for a message.
+- **No notification:** turn on notifications for Photon in the app (or Settings > Apps > Photon > Notifications). Photon runs either way, but the notification shows its address and a Stop button.
+- **Other devices can't open the address:** the phone has to be on the same Wi-Fi as them, not mobile data or a guest network. Some routers keep devices on the guest network apart.
+- **The address changed:** give the phone a fixed address with a DHCP reservation in your router.
+- **Lights or TVs aren't found automatically:** type their IP addresses in the Photon card for them. Some Wi-Fi networks block the broadcast messages used for finding devices.
+- **Installing an update fails with "App not installed" or "conflicts with an existing package":** the new APK was signed with a different key from the one already on the phone. Only install APKs from this repository's Releases page.
+- **Use this device's location** (under *Your location*) doesn't work inside the app. Type the latitude and longitude, or open Photon in the phone's browser and use the button there.
 
 ## Still stuck?
 
