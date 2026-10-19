@@ -1,15 +1,23 @@
-# Makes a GitHub release when a version tag (like v1.5.0) is pushed: builds the Windows and
-# Mac installers and attaches them, with docs/RELEASE-<version>.md as the notes.
+# When a release is published on GitHub (or a version tag like v1.5.0 is pushed), builds the
+# Windows and Mac installers from that tag and attaches them. A pushed tag gets a new release
+# with docs/RELEASE-<version>.md as the notes.
 # The Android APK has to be signed with the release key, which never goes to GitHub, so it's
 # built and attached by hand (see android/README.md).
 name: Release
 
 on:
+  release:
+    types: [published]
   push:
     tags: ['v*']
 
 permissions:
   contents: write
+
+# Publishing a release also creates its tag, which starts this twice; run those one at a time.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
 
 jobs:
   windows:
@@ -56,4 +64,8 @@ jobs:
           NOTES="docs/RELEASE-$VERSION.md"
           [ -f "$NOTES" ] || NOTES=/dev/null
           ls -la dist
-          gh release create "$GITHUB_REF_NAME" dist/* --title "Photon $VERSION" --notes-file "$NOTES"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* --title "Photon $VERSION" --notes-file "$NOTES"
+          fi
