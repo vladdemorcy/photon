@@ -412,6 +412,25 @@ app.post('/api/auth/setup', wrap(async (req, res) => {
   res.json({ ok: true });
 }));
 
+// Signing in with the phone's fingerprint or face, in the Android app. The app unlocks a device
+// key with the phone's biometrics and sends it here. Device keys only work from the phone
+// Photon runs on (the app's own page talks to 127.0.0.1), so a copied key is no use elsewhere.
+const isLoopback = req => /^(127\.\d+\.\d+\.\d+|::1)$/.test(clientIp(req));
+app.post('/api/auth/device-login', wrap(async (req, res) => {
+  if (refuseUnlessSameOrigin(req, res) || tooMany(req, res)) return;
+  if (!isLoopback(req)) return res.status(403).json({ error: 'Fingerprint and face sign-in only work in the Photon app on the phone Photon runs on.' });
+  if (!auth.deviceMatches(req.body?.id, req.body?.token)) {
+    auth.noteFailure(clientIp(req));
+    await slowDown();
+    return res.status(401).json({ error: 'Fingerprint and face sign-in was turned off, because the password changed or everyone was signed out. Sign in with your password and turn it on again.', deviceGone: true });
+  }
+  auth.noteSuccess(clientIp(req));
+  const id = auth.startSession(req);
+  auth.setCookie(res, req, id);
+  engine.addLog('info', 'Signed in to Photon with fingerprint or face on this phone');
+  res.json({ ok: true });
+}));
+
 app.post('/api/auth/logout', (req, res) => {
   if (refuseUnlessSameOrigin(req, res)) return;
   auth.endSession(req);
@@ -443,14 +462,37 @@ app.post('/api/auth/password', wrap(async (req, res) => {
   }
   await auth.setPassword(String(req.body?.password ?? ''));
   auth.endAllSessions();
+  auth.removeAllDevices();
   const id = auth.startSession(req); // a fresh session for this browser
   auth.setCookie(res, req, id);
   engine.addLog('ok', 'Photon\'s password was changed. Everyone else was signed out.');
   res.json({ ok: true });
 }));
 
+// Turning on fingerprint or face sign-in for this phone. Takes the password once more.
+app.get('/api/auth/devices', (req, res) => res.json(auth.deviceList()));
+app.post('/api/auth/devices', wrap(async (req, res) => {
+  if (tooMany(req, res)) return;
+  if (!isLoopback(req)) return res.status(403).json({ error: 'Fingerprint and face sign-in can only be turned on in the Photon app on the phone Photon runs on.' });
+  if (!(await auth.verifyPassword(String(req.body?.password ?? '')))) {
+    auth.noteFailure(clientIp(req));
+    await slowDown();
+    return res.status(403).json({ error: 'That password isn\'t right.' });
+  }
+  auth.noteSuccess(clientIp(req));
+  const device = auth.addDevice(req.body?.name);
+  engine.addLog('ok', 'Fingerprint and face sign-in was turned on for this phone');
+  res.json(device);
+}));
+app.delete('/api/auth/devices/:id', (req, res) => {
+  const removed = auth.removeDevice(String(req.params.id));
+  if (removed) engine.addLog('info', 'Fingerprint and face sign-in was turned off for a phone');
+  res.json({ ok: true, removed });
+});
+
 app.post('/api/auth/logout-all', (req, res) => {
   auth.endAllSessions();
+  auth.removeAllDevices();
   auth.clearCookie(res, req);
   engine.addLog('info', 'Everyone was signed out of Photon');
   res.json({ ok: true });

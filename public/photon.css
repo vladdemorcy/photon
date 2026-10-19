@@ -633,6 +633,9 @@ html { scrollbar-color: var(--sb-thumb) transparent; scrollbar-width: thin; }
 .auth h1 { font-size: 24px; }
 .auth form { display: grid; gap: 12px; margin-top: 4px; }
 .auth .btn.primary { padding: 11px 16px; font-size: 15px; }
+.auth #bioSignIn { padding: 11px 16px; font-size: 15px; }
+.bio-box { margin: 16px 0 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.bio-box h3 { font-size: 14px; margin: 0 0 4px; }
 .auth .result:empty { display: none; }
 body.signed-out .tabs, body.signed-out .save-state { display: none; }
 .pw-form { display: grid; gap: 10px; max-width: 420px; }

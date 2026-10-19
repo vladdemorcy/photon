@@ -194,6 +194,8 @@ Turning on HTTPS also lets **Use this device's location** work from other device
 
 **Change the password or sign everyone out** under **Connections > Password and sign-in**. Changing the password signs out every other device.
 
+**Fingerprint or face in the Android app.** After you sign in with the password in the app, Photon offers to use your fingerprint or face next time (you can also turn it on or off under **Connections > Password and sign-in**). The app keeps a device key that Android's keystore only unlocks right after a strong fingerprint or face match; your fingerprint never leaves Android, and Photon keeps only a hash of the key. The key only works from the phone Photon runs on. Adding a fingerprint or face to the phone, changing Photon's password, or *Sign out everywhere* turns it off, and the app asks for the password once. It needs Android 9 or newer and a screen lock.
+
 **Forgot the password?** Run the installer again and choose a new one. Or, from an admin command prompt (Windows) or Terminal (Mac), run Photon's password tool:
 
 ```

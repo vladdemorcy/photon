@@ -42,6 +42,7 @@ function create(dataDir) {
   const AUTH_FILE = path.join(dataDir, 'auth.json');
   const SESSIONS_FILE = path.join(dataDir, 'sessions.json');
   const SETUP_FILE = path.join(dataDir, 'setup-code');
+  const DEVICES_FILE = path.join(dataDir, 'devices.json');
 
   const writePrivate = (file, text) => {
     fs.mkdirSync(dataDir, { recursive: true });
@@ -112,7 +113,7 @@ function create(dataDir) {
 
   // Back to "no password": the next visitor needs a new setup code. Used by the password tool.
   function reset() {
-    for (const f of [AUTH_FILE, SESSIONS_FILE, SETUP_FILE]) { try { fs.unlinkSync(f); } catch { /* none */ } }
+    for (const f of [AUTH_FILE, SESSIONS_FILE, SETUP_FILE, DEVICES_FILE]) { try { fs.unlinkSync(f); } catch { /* none */ } }
     authCache.at = -1;
     sessionsCache.at = -1;
   }
@@ -220,6 +221,51 @@ function create(dataDir) {
     return want.length > 0 && given.length === want.length && crypto.timingSafeEqual(given, want);
   };
 
+  // ---- Devices that sign in with a fingerprint or face ---------------------------------------
+  // The Android app can keep a device key that only unlocks with the phone's fingerprint or
+  // face (Android's keystore enforces that, Photon never sees the fingerprint). Photon keeps a
+  // SHA-256 of each key. Changing the password or signing out everywhere removes them all.
+  const DEVICE_MAX_AGE = 365 * 24 * 3600e3;
+  function devices() {
+    try { return JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8')) || {}; } catch { return {}; }
+  }
+  function saveDevices(data) {
+    const now = Date.now();
+    for (const [id, d] of Object.entries(data)) if (now - d.created > DEVICE_MAX_AGE) delete data[id];
+    if (!Object.keys(data).length) { try { fs.unlinkSync(DEVICES_FILE); } catch { /* none */ } return; }
+    writePrivate(DEVICES_FILE, JSON.stringify(data, null, 2));
+  }
+  function addDevice(name) {
+    const id = crypto.randomBytes(16).toString('base64url');
+    const token = crypto.randomBytes(32).toString('base64url');
+    const all = devices();
+    all[id] = { hash: digest(token), name: String(name || 'Phone').slice(0, 80), created: Date.now(), used: null };
+    // A handful per Photon is plenty; the oldest go first.
+    const ids = Object.keys(all).sort((a, b) => all[a].created - all[b].created);
+    while (ids.length > 10) delete all[ids.shift()];
+    saveDevices(all);
+    return { id, token };
+  }
+  function deviceMatches(id, token) {
+    if (!hasPassword() || typeof id !== 'string' || typeof token !== 'string' || token.length > 100) return false;
+    const all = devices();
+    const d = Object.prototype.hasOwnProperty.call(all, id) ? all[id] : null;
+    if (!d || Date.now() - d.created > DEVICE_MAX_AGE) return false;
+    const a = Buffer.from(digest(token)), b = Buffer.from(String(d.hash));
+    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+    saveDevices({ ...all, [id]: { ...d, used: Date.now() } });
+    return true;
+  }
+  function removeDevice(id) {
+    const all = devices();
+    if (!Object.prototype.hasOwnProperty.call(all, id)) return false;
+    delete all[id];
+    saveDevices(all);
+    return true;
+  }
+  const removeAllDevices = () => saveDevices({});
+  const deviceList = () => Object.entries(devices()).map(([id, d]) => ({ id, name: d.name, created: d.created, used: d.used }));
+
   // ---- Slowing down guesses ----------------------------------------------------------------
   // At most 5 wrong tries per address and 30 in total per 15 minutes. Each wrong try also
   // waits a moment before answering.
@@ -248,6 +294,7 @@ function create(dataDir) {
     setupCode, codeMatches,
     startSession, sessionFor, endSession, endAllSessions, setCookie, clearCookie, csrfOk,
     limited, noteFailure, noteSuccess,
+    addDevice, deviceMatches, removeDevice, removeAllDevices, deviceList,
     sessionCount: () => Object.keys(sessions()).length,
   };
 }

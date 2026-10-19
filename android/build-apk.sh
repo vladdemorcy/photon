@@ -144,10 +144,15 @@ aapt2 link -o "$OUT/base.apk" -I "$FRAMEWORK_RES" \
 # ---- 5. Java ----------------------------------------------------------------------------------
 # Compiled against the Android 6 platform library (the newest Ubuntu packages). Calls that
 # need newer Android versions go through Compat.java, which looks them up at run time.
-mkdir -p "$OUT/classes"
+# Android 9's fingerprint and face classes aren't in that library either, so the build uses
+# small stand-ins from android/stubs to compile against. They stay out of the APK; on the
+# phone, Android's real classes are used.
+mkdir -p "$OUT/classes" "$OUT/stub-classes"
+javac -nowarn -Xlint:-options -source 8 -target 8 -encoding UTF-8 \
+  -bootclasspath "$PLATFORM_JAR" -d "$OUT/stub-classes" $(find "$ANDROID/stubs" -name '*.java')
 find "$ANDROID/java" "$OUT/gen" -name '*.java' > "$OUT/sources.txt"
 javac -nowarn -Xlint:-options -source 8 -target 8 -encoding UTF-8 \
-  -bootclasspath "$PLATFORM_JAR" -d "$OUT/classes" @"$OUT/sources.txt"
+  -bootclasspath "$PLATFORM_JAR" -classpath "$OUT/stub-classes" -d "$OUT/classes" @"$OUT/sources.txt"
 dx --dex --min-sdk-version="$MIN_SDK" --output="$OUT/classes.dex" "$OUT/classes"
 
 # ---- 6. Put the APK together, align and sign -------------------------------------------------

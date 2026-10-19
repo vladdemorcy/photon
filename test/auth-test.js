@@ -15,8 +15,8 @@ const ok = (cond, what) => { console.log(`${cond ? 'PASS' : 'FAIL'}: ${what}`); 
 
 // Plain http requests, so headers browsers protect (Host, Origin, Sec-Fetch-Site) can be set.
 const http = require('http');
-function req(method, p, { body, cookie, csrf, headers = {} } = {}) {
-  const u = new URL(BASE + p);
+function req(method, p, { body, cookie, csrf, headers = {}, base = BASE } = {}) {
+  const u = new URL(base + p);
   const h = { ...headers };
   const payload = body !== undefined ? JSON.stringify(body) : null;
   if (payload) { h['Content-Type'] = 'application/json'; h['Content-Length'] = Buffer.byteLength(payload); }
@@ -128,12 +128,35 @@ const cookieOf = setCookie => (/photon_sid=([^;]*)/.exec(setCookie) || [])[0] ||
   });
   ok(big === 403, `big upload to a webhook with the wrong key refused straight away (${big})`);
 
+  // Fingerprint or face sign-in in the Android app: a device key, kept only as a hash
+  ok((await req('POST', '/api/auth/devices', { cookie, csrf, body: { password: 'not the password' } })).status === 403, 'turning on fingerprint sign-in needs the password');
+  ok((await req('POST', '/api/auth/devices', { body: { password: PASSWORD } })).status === 401, 'turning on fingerprint sign-in needs signing in');
+  const dev = await req('POST', '/api/auth/devices', { cookie, csrf, body: { password: PASSWORD, name: 'Test phone' } });
+  ok(dev.status === 200 && dev.data.id && dev.data.token, 'device key made for fingerprint sign-in');
+  ok(!fs.readFileSync(path.join(DATA, 'devices.json'), 'utf8').includes(dev.data.token), 'devices file keeps only a hash of the key');
+  ok((await req('GET', '/api/auth/devices', { cookie })).data.some(d => d.name === 'Test phone'), 'device listed');
+  const badDev = await req('POST', '/api/auth/device-login', { body: { id: dev.data.id, token: 'x'.repeat(43) } });
+  ok(badDev.status === 401 && !badDev.setCookie, 'wrong device key refused');
+  const devLogin = await req('POST', '/api/auth/device-login', { body: { id: dev.data.id, token: dev.data.token } });
+  const devCookie = cookieOf(devLogin.setCookie);
+  ok(devLogin.status === 200 && (await req('GET', '/api/config', { cookie: devCookie })).status === 200, 'device key signs in');
+  ok((await req('POST', '/api/auth/device-login', { body: { id: dev.data.id, token: dev.data.token }, headers: { Origin: 'http://evil.example' } })).status === 403, 'device sign-in from another website refused');
+  const lan = Object.values(require('os').networkInterfaces()).flat().find(i => i && i.family === 'IPv4' && !i.internal);
+  if (lan) {
+    const fromLan = await req('POST', '/api/auth/device-login', { base: `http://${lan.address}:${new URL(BASE).port}`, body: { id: dev.data.id, token: dev.data.token } });
+    ok(fromLan.status === 403, `device key refused from another device on the network (${fromLan.status})`);
+  }
+  ok((await req('DELETE', `/api/auth/devices/${dev.data.id}`, { cookie, csrf })).status === 200, 'device key removed');
+  ok((await req('POST', '/api/auth/device-login', { body: { id: dev.data.id, token: dev.data.token } })).status === 401, 'removed device key no longer signs in');
+  const dev2 = (await req('POST', '/api/auth/devices', { cookie, csrf, body: { password: PASSWORD } })).data;
+
   // Changing the password signs out every other device
   const second = cookieOf((await req('POST', '/api/auth/login', { body: { password: PASSWORD } })).setCookie);
   ok((await req('GET', '/api/config', { cookie: second })).status === 200, 'a second device signs in');
   const changed = await req('POST', '/api/auth/password', { cookie, csrf, body: { current: PASSWORD, password: 'an even longer passphrase now' } });
   ok(changed.status === 200, 'password changed with the current password');
   ok((await req('GET', '/api/config', { cookie: second })).status === 401, 'the other device is signed out after the change');
+  ok((await req('POST', '/api/auth/device-login', { body: { id: dev2.id, token: dev2.token } })).status === 401, 'changing the password turns off fingerprint sign-in');
   cookie = cookieOf(changed.setCookie);
   csrf = (await req('GET', '/api/auth/state', { cookie })).data.csrf;
   ok((await req('GET', '/api/config', { cookie })).status === 200, 'this device stays signed in with a new session');

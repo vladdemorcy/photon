@@ -19,6 +19,9 @@ import android.webkit.WebViewClient;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -142,11 +145,59 @@ public class WebActivity extends Activity {
         }
     }
 
+    private void onPhotonPage(final Runnable r) {
+        runOnUiThread(new Runnable() {
+            @Override public void run() {
+                String url = web.getUrl();
+                if (url != null && isPhoton(url)) r.run();
+            }
+        });
+    }
+
+    private Biometric.Result reply(final int req) {
+        return new Biometric.Result() {
+            @Override public void done(JSONObject r) {
+                try { r.put("req", req); } catch (JSONException ignored) { }
+                web.evaluateJavascript("window.__photonBiometric&&window.__photonBiometric(" + r.toString() + ")", null);
+            }
+        };
+    }
+
     private final class Bridge {
         @JavascriptInterface
         public void openExternal(final String url) {
             runOnUiThread(new Runnable() {
                 @Override public void run() { WebActivity.this.openExternal(url); }
+            });
+        }
+
+        // ---- Fingerprint or face sign-in (see Biometric.java) ----------------------------
+        // Results go back to the page through window.__photonBiometric. Each call first checks,
+        // on the main thread, that the page asking is Photon's own.
+
+        @JavascriptInterface
+        public String biometricStatus() {
+            return Biometric.status(WebActivity.this).toString();
+        }
+
+        @JavascriptInterface
+        public void biometricEnable(final int req, final String id, final String token) {
+            onPhotonPage(new Runnable() {
+                @Override public void run() { Biometric.enable(WebActivity.this, id, token, reply(req)); }
+            });
+        }
+
+        @JavascriptInterface
+        public void biometricUnlock(final int req) {
+            onPhotonPage(new Runnable() {
+                @Override public void run() { Biometric.unlock(WebActivity.this, reply(req)); }
+            });
+        }
+
+        @JavascriptInterface
+        public void biometricDisable(final int req) {
+            onPhotonPage(new Runnable() {
+                @Override public void run() { Biometric.disable(WebActivity.this); reply(req).done(new JSONObject()); }
             });
         }
 
