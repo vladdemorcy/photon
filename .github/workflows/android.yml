@@ -1,0 +1,71 @@
+# Builds the Android app and tests it on Android emulators.
+# Runs when the app or Photon changes, or by hand from the Actions tab.
+# The APK it makes is signed with a throwaway test key; release APKs are signed separately
+# (see android/README.md).
+name: Android app
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install build tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq android-sdk-build-tools android-sdk-platform-23 android-framework-res \
+            apksigner zipalign dalvik-exchange clang lld patchelf zip
+      - name: Build the APK
+        run: bash android/build-apk.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: photon-apk
+          path: dist/Photon-*.apk
+
+  test:
+    needs: build
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        api-level: [30, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: photon-apk
+          path: dist
+      - name: Let the emulator use KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Test on Android (API ${{ matrix.api-level }})
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api-level }}
+          target: google_apis
+          arch: x86_64
+          ram-size: 4096M
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash android/test/emulator-test.sh "$(ls dist/Photon-*.apk | head -1)" android-test-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-test-results-api${{ matrix.api-level }}
+          path: android-test-results
