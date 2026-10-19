@@ -1,0 +1,9 @@
+#!/bin/sh
+# Opens Photon in the default browser. Photon itself runs in the background as a service.
+PORT=$(tr -dc '0-9' < /Library/Photon/port 2>/dev/null)
+[ -n "$PORT" ] || PORT=8787
+if ! curl -fs --max-time 2 "http://127.0.0.1:$PORT/api/version" >/dev/null 2>&1; then
+  osascript -e 'display dialog "Photon isn'"'"'t answering right now. It may still be starting, so give it a few seconds and try again. If it keeps happening, run the Photon installer again." buttons {"OK"} default button 1 with title "Photon" with icon POSIX file "/Library/Photon/photon.icns"' >/dev/null 2>&1
+  exit 0
+fi
+open "http://localhost:$PORT/"
