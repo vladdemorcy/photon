@@ -111,5 +111,18 @@ adb shell cat /data/data/$PKG/files/data/photon.log > "$OUT/photon.log" 2>/dev/n
 adb logcat -d > "$OUT/logcat.txt" 2>/dev/null || true
 grep -E "Photon|photon|AndroidRuntime|DEBUG|linker" "$OUT/logcat.txt" > "$OUT/logcat-photon.txt" || true
 
+echo; echo "---- Photon's console (start) ----"; head -n 15 "$OUT/console.log" 2>/dev/null
+echo "---- Photon's console (end) ----"; tail -n 15 "$OUT/console.log" 2>/dev/null
+
+# TEMPORARY: small copies of the screenshots in the log, to check the screens without
+# downloading the results.
+if command -v convert >/dev/null; then
+  for f in "$OUT"/*.png; do
+    echo "SCREEN-BEGIN $(basename "$f")"
+    convert "$f" -resize 400x -quality 70 jpg:- | base64 -w 0; echo
+    echo "SCREEN-END"
+  done
+fi
+
 echo; cat "$OUT/summary.txt"
 exit $FAILED
