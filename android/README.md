@@ -49,7 +49,7 @@ Without `PHOTON_KEYSTORE`, the build makes a throwaway test key. That's fine for
 To run the same test against your own emulator or a phone connected with adb:
 
 ```
-bash android/test/emulator-test.sh dist/Photon-1.4.3.apk
+bash android/test/emulator-test.sh dist/Photon-1.4.4.apk
 ```
 
 ## Icons
