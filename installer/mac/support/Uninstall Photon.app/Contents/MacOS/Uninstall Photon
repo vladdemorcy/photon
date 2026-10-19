@@ -1,0 +1,12 @@
+#!/bin/sh
+# Asks what to remove, then runs the uninstaller with an admin password prompt.
+ICON='POSIX file "/Library/Photon/photon.icns"'
+CHOICE=$(osascript -e "button returned of (display dialog \"Remove Photon from this Mac?\" & return & return & \"Your rooms and settings can stay in /Library/Application Support/Photon, in case you install Photon again.\" buttons {\"Cancel\", \"Remove everything\", \"Remove, keep settings\"} default button \"Remove, keep settings\" cancel button \"Cancel\" with title \"Remove Photon\" with icon $ICON)" 2>/dev/null) || exit 0
+FLAG=""
+[ "$CHOICE" = "Remove everything" ] && FLAG="--all"
+cp /Library/Photon/uninstall.sh /tmp/photon-uninstall.sh 2>/dev/null || { osascript -e 'display dialog "Photon is already removed." buttons {"OK"} default button 1 with title "Remove Photon"'; exit 0; }
+chmod 755 /tmp/photon-uninstall.sh
+if osascript -e "do shell script \"/bin/sh /tmp/photon-uninstall.sh $FLAG\" with prompt \"Photon needs your password to remove itself.\" with administrator privileges" >/dev/null 2>&1; then
+  osascript -e 'display dialog "Photon was removed." buttons {"OK"} default button 1 with title "Remove Photon"' >/dev/null 2>&1
+fi
+rm -f /tmp/photon-uninstall.sh
