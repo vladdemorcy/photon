@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds dist/Photon-<version>.pkg, the macOS installer, on Linux or macOS.
-# Needs Node.js and npm, Python 3, plus xar and mkbom (bomutils). On a Mac with Xcode tools,
-# the same layout can be built with pkgbuild/productbuild instead.
+# Needs Node.js and npm, Python 3, plus xar and mkbom (bomutils). On a Mac it uses Apple's own
+# pkgbuild and productbuild instead, which come with macOS.
 #   cd installer/mac && ./build-mac.sh
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -49,7 +49,8 @@ PKG="$WORK/flat/photon.pkg"
 python3 "$HERE/mkcpio.py" "$WORK/root" "$PKG/Payload"
 mkdir -p "$WORK/scripts" && cp scripts/preinstall scripts/postinstall "$WORK/scripts/" && chmod 755 "$WORK/scripts/"*
 python3 "$HERE/mkcpio.py" "$WORK/scripts" "$PKG/Scripts"
-mkbom -u 0 -g 80 "$WORK/root" "$PKG/Bom"
+NATIVE=0; [ "$(uname)" = Darwin ] && command -v pkgbuild >/dev/null && NATIVE=1
+[ $NATIVE = 1 ] || mkbom -u 0 -g 80 "$WORK/root" "$PKG/Bom"
 FILES=$(find "$WORK/root" | wc -l | tr -d ' ')
 KB=$(du -sk "$WORK/root" | cut -f1)
 cat > "$PKG/PackageInfo" <<XML
@@ -95,10 +96,25 @@ cat > "$WORK/flat/Distribution" <<XML
 XML
 
 rm -f "$OUT"
-if command -v xar >/dev/null 2>&1; then
-  (cd "$WORK/flat" && xar --compression none -cf "$OUT" Distribution Resources photon.pkg)
+if [ $NATIVE = 1 ]; then
+  # Apple's tools: files owned by root, and the launcher apps kept where they are (pkgbuild
+  # would otherwise let Installer move them to wherever a copy of the app already is).
+  pkgbuild --analyze --root "$WORK/root" "$WORK/components.plist" >/dev/null
+  python3 - "$WORK/components.plist" <<'PY'
+import plistlib, sys
+p = sys.argv[1]
+items = plistlib.load(open(p, 'rb'))
+for i in items:
+    i['BundleIsRelocatable'] = False
+    i['BundleOverwriteAction'] = 'upgrade'
+plistlib.dump(items, open(p, 'wb'))
+PY
+  mkdir -p "$WORK/native"
+  pkgbuild --root "$WORK/root" --scripts "$WORK/scripts" --component-plist "$WORK/components.plist" \
+    --identifier "$ID" --version "$VERSION" --install-location / --ownership recommended "$WORK/native/photon.pkg"
+  productbuild --distribution "$WORK/flat/Distribution" --resources "$WORK/flat/Resources" --package-path "$WORK/native" "$OUT"
 else
-  pkgutil --flatten "$WORK/flat" "$OUT"   # a Mac without the xar tool
+  (cd "$WORK/flat" && xar --compression none -cf "$OUT" Distribution Resources photon.pkg)
 fi
 echo
 echo "Built $OUT ($(du -h "$OUT" | cut -f1))"
