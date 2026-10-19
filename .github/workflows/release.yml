@@ -1,0 +1,59 @@
+# Makes a GitHub release when a version tag (like v1.5.0) is pushed: builds the Windows and
+# Mac installers and attaches them, with docs/RELEASE-<version>.md as the notes.
+# The Android APK has to be signed with the release key, which never goes to GitHub, so it's
+# built and attached by hand (see android/README.md).
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nsis
+      - run: bash installer/build.sh
+      - uses: actions/upload-artifact@v5
+        with:
+          name: windows
+          path: dist/Photon-Setup-*.exe*
+
+  mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: bash installer/mac/build-mac.sh
+      - uses: actions/upload-artifact@v5
+        with:
+          name: mac
+          path: dist/Photon-*.pkg*
+
+  release:
+    needs: [windows, mac]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTES="docs/RELEASE-$VERSION.md"
+          [ -f "$NOTES" ] || NOTES=/dev/null
+          ls -la dist
+          gh release create "$GITHUB_REF_NAME" dist/* --title "Photon $VERSION" --notes-file "$NOTES"
