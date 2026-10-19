@@ -1,0 +1,36 @@
+# One-off: puts the signed Android APK on the v1.4.3 release. The APK is uploaded here in
+# pieces because the browser upload has a size limit. Lives only on the apk-upload branch.
+name: Attach Android APK to release
+
+on:
+  push:
+    branches: [apk-upload]
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Put the pieces back together
+        id: join
+        run: |
+          if ! ls apk-parts/Photon-1.4.3.apk.part-* >/dev/null 2>&1; then echo "No pieces yet"; exit 0; fi
+          cat apk-parts/Photon-1.4.3.apk.part-* > Photon-1.4.3.apk
+          if echo "1758e0262c9f09c4b42354bf5e62d5f096b6cfedcb63487f10d6424d18dd7be4  Photon-1.4.3.apk" | sha256sum -c --quiet; then
+            echo "ready=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "Not all pieces are here yet ($(ls apk-parts | wc -l) so far)"
+          fi
+      - name: Attach to the release
+        if: steps.join.outputs.ready == 'yes'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload v1.4.3 Photon-1.4.3.apk --clobber
+          git fetch -q origin main
+          git show origin/main:docs/RELEASE-1.4.3.md > notes.md
+          gh release edit v1.4.3 --notes-file notes.md
+          gh release view v1.4.3
