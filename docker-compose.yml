@@ -1,0 +1,14 @@
+services:
+  photon:
+    build: .
+    container_name: photon
+    restart: unless-stopped
+    # Host networking lets Govee and WiZ discovery (UDP broadcast/multicast) reach your lights.
+    network_mode: host
+    environment:
+      - TZ=America/New_York      # your time zone, used for time-of-day behaviors
+      - PORT=8787
+      # - UI_PASSWORD=change-me  # optional password for the web UI
+      # HTTPS is set up in the app (Connections). It listens on 8443 by default.
+    volumes:
+      - ./data:/data
