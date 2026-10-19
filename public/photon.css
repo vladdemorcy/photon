@@ -462,6 +462,11 @@ input.kelvin { --track: var(--kelvin); }
 .sys-head .status.ok { color: var(--ok); }
 .sys-head .spacer { flex: 1; }
 .sys-body { padding: 0 16px 16px; display: grid; gap: 14px; }
+/* Long button labels ("Pair (press the button on the back of the bridge)"), error messages and
+   addresses wrap inside the card instead of widening the page on a phone. */
+.conn > section, .sys, .sys-body, .sys-body > * { min-width: 0; }
+.sys-body .actions-row .btn { white-space: normal; text-align: center; max-width: 100%; }
+.sys-body p, .sys-body .result, .sys-body .help, .sys-body .tv-status { overflow-wrap: anywhere; }
 .sys-body .blurb { color: var(--muted); font-size: 14px; max-width: 70ch; }
 .fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
 .copy-row { display: flex; gap: 8px; }
