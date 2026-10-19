@@ -6,7 +6,7 @@ Photon sets each room's lights to match what's playing. When a movie starts on t
 **Media servers:** Plex, Jellyfin, Emby
 **Smart TVs:** Roku, LG webOS, Android TV / Google TV / Fire TV, Chromecast, Vizio, Samsung
 
-**Download:** get the Windows and Mac installers from this repository's **Releases** page. Step-by-step guides: [Installing Photon](docs/INSTALL.md) and [Troubleshooting](docs/TROUBLESHOOTING.md).
+**Download:** get the Windows and Mac installers and the Android app from this repository's **Releases** page. Step-by-step guides: [Installing Photon](docs/INSTALL.md) and [Troubleshooting](docs/TROUBLESHOOTING.md).
 
 You can use more than one of each at the same time. A single room can mix Hue and Govee lights, for example, and respond to both Plex and Jellyfin players.
 
