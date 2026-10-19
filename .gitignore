@@ -8,3 +8,6 @@ data/
 *.log
 .DS_Store
 Thumbs.db
+
+# Throwaway test certificates (see test/fixtures/README.md)
+test/fixtures/*.pem
