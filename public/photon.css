@@ -480,17 +480,6 @@ input.kelvin { --track: var(--kelvin); }
   .rooms-layout { grid-template-columns: 210px minmax(0, 1fr); }
   .library { grid-column: 1 / -1; position: static; max-height: none; }
 }
-@media (max-width: 820px) {
-  main { padding: 14px 16px; }
-  .top { gap: 12px; padding: 10px 16px; flex-wrap: wrap; }
-  .save-state { order: 3; width: 100%; margin: 0; }
-  .rooms-layout, .two-col, .welcome { grid-template-columns: minmax(0, 1fr); }
-  .side { position: static; }
-  .rule-body { padding-left: 14px; }
-  .brand-word { display: none; }
-  .badge-now { display: none; }
-  .stage-bar .label { display: none; }
-}
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
@@ -585,7 +574,6 @@ html { scrollbar-color: var(--sb-thumb) transparent; scrollbar-width: thin; }
 /* Version next to the name */
 .version { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; margin-left: -18px; font-variant-numeric: tabular-nums; }
 .version:empty { display: none; }
-@media (max-width: 820px) { .version { margin-left: -4px; } }
 
 /* ---- Outdoor spaces and outdoor furniture ---- */
 .plan.outdoor {
@@ -630,3 +618,187 @@ html { scrollbar-color: var(--sb-thumb) transparent; scrollbar-width: thin; }
 .tv-status { margin: 4px 0 10px; }
 .tv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .tv-list li { padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); }
+
+/* Shared bits used by the phone layout, harmless on bigger screens */
+[hidden] { display: none !important; }
+.page-title, .tabs svg, .jump { display: none; }
+.new-room { width: 100%; }
+.popover header .spacer { flex: 1; }
+.popover header .btn { margin: -4px -6px -4px 0; }
+.count {
+  font-size: 11px; font-weight: 500; color: var(--muted); font-variant-numeric: tabular-nums;
+  border: 1px solid var(--line-2); border-radius: 999px; padding: 0 6px; min-width: 18px; text-align: center; line-height: 16px;
+}
+
+/* ---- Phones ----
+   One row of header, tabs along the bottom where thumbs are, rooms as a strip of pills,
+   one room section at a time, and lists that slide up from the bottom. */
+@media (max-width: 820px), (max-width: 1180px) and (pointer: coarse) {
+  :root { --head: 52px; --tabbar: calc(62px + env(safe-area-inset-bottom)); }
+  body { padding-bottom: var(--tabbar); }
+  body.sheet-open { overflow: hidden; }
+  input[type=text], input[type=password], input[type=number], input:not([type]), select, textarea { font-size: 16px; padding: 9px 11px; }
+
+  /* No blur on the header here: a blurred parent would trap the fixed tab bar inside it. */
+  .top {
+    backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg);
+    flex-wrap: nowrap; gap: 10px; height: calc(var(--head) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+  }
+  .brand-word, .version { display: none; }
+  .brand-mark { width: 30px; height: 30px; }
+  .page-title { display: block; font-family: var(--font-display); font-weight: 600; font-size: 19px; letter-spacing: -.01em; white-space: nowrap; }
+  .save-state.quiet { visibility: hidden; }
+  .activity .section-head h1 { display: none; }
+  body.pop-open { padding-bottom: calc(52vh + var(--tabbar)); }
+  .save-state { order: 0; width: auto; margin: 0 0 0 auto; min-width: 0; max-width: 32vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+  .theme-switch button { width: 28px; height: 28px; }
+
+  .tabs {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 0;
+    padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    background: var(--header-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-top: 1px solid var(--line);
+  }
+  .tabs a { display: grid; justify-items: center; gap: 2px; padding: 6px 4px 4px; border-radius: 12px; font-size: 12px; }
+  .tabs svg { display: block; width: 23px; height: 23px; }
+  .tabs a[aria-current="page"] { background: none; box-shadow: none; color: var(--text); }
+  .tabs a[aria-current="page"] svg { color: var(--cyan); filter: drop-shadow(0 0 7px color-mix(in srgb, var(--cyan) 55%, transparent)); }
+  .toast { bottom: calc(var(--tabbar) + 12px); }
+
+  main { padding: 12px max(14px, env(safe-area-inset-right)) 24px max(14px, env(safe-area-inset-left)); }
+  .btn { padding: 9px 14px; }
+  .btn.sm { padding: 7px 12px; font-size: 14px; }
+  .chip { padding: 7px 12px; font-size: 14px; }
+  .seg button { padding: 8px 12px; font-size: 14px; }
+  .rooms-layout, .two-col, .welcome { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  .welcome { padding: 18px; }
+  .setup-strip { font-size: 13.5px; padding: 10px 12px; gap: 10px; }
+  .setup-strip .btn { padding: 6px 11px; font-size: 13px; }
+
+  /* Rooms as pills. The one that's playing glows, like light spilling out of the room. */
+  .side {
+    position: static; display: flex; gap: 8px; align-items: center; overflow-x: auto;
+    margin: 0 -14px; padding: 2px 14px 4px; background: none; border: 0; border-radius: 0; scrollbar-width: none;
+  }
+  .side::-webkit-scrollbar { display: none; }
+  .side h2 { display: none; }
+  .room-list { display: flex; gap: 8px; margin: 0; flex: none; }
+  .room-list li a {
+    white-space: nowrap; padding: 8px 14px; border-radius: 999px; gap: 8px;
+    border: 1px solid var(--line-2); background: var(--panel-2);
+  }
+  .room-list li a[aria-current="true"] { background: var(--raise); border-color: color-mix(in srgb, var(--cyan) 50%, var(--line-2)); box-shadow: none; }
+  .room-list li a:has(.dot.playing) { box-shadow: 0 0 22px color-mix(in srgb, var(--cyan) 30%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--cyan) 40%, transparent); }
+  .room-list .state:empty { display: none; }
+  .room-list .state { margin-left: 0; }
+  .new-room { width: auto; flex: none; border-radius: 999px; border-style: dashed; color: var(--muted); }
+
+  .editor { gap: 12px; }
+  .room-head { gap: 8px 12px; }
+  .room-head .room-name { font-size: 23px; flex: 1 1 0; width: 0; min-width: 0; field-sizing: fixed; text-overflow: ellipsis; }
+  .now-playing, .filter-note { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .room-tabs {
+    position: sticky; top: calc(var(--head) + env(safe-area-inset-top)); z-index: 15;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
+    margin: 0 -14px; padding: 6px 10px;
+    background: var(--header-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .room-tabs button {
+    border: 0; background: none; color: var(--muted); font-weight: 500; font-size: 14px; cursor: pointer;
+    padding: 8px 2px; border-radius: 10px; display: inline-flex; justify-content: center; align-items: center; gap: 5px; min-width: 0;
+  }
+  .room-tabs button[aria-selected="true"] { color: var(--text); background: var(--raise); box-shadow: inset 0 0 0 1px var(--line-2); }
+  .room-tabs .count { font-size: 10.5px; padding: 0 5px; min-width: 16px; }
+
+  /* The plan uses the full width of the screen */
+  .stage { margin: 0 -14px; padding: 12px 14px 14px; border-radius: 0; border-left: 0; border-right: 0; }
+  .stage-bar { gap: 8px; }
+  .stage-bar .label, .stage-bar .spacer { display: none; }
+  .stage-bar [data-act="simulate"] { margin-left: auto; }
+  .stage-bar .seg[aria-label="Preview event"] { order: 3; width: 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  .stage-bar .seg[aria-label="Preview event"]::-webkit-scrollbar { display: none; }
+  .stage-bar .seg[aria-label="Preview event"] button { flex: 1 0 auto; }
+  .plan { touch-action: pan-y; border-radius: 10px; }
+  /* Furniture covers most of a plan, so a finger on it scrolls the page until it's tapped.
+     Once selected it drags. Lights always drag. */
+  .plan .thing.furn:not(.sel) { touch-action: pan-y; }
+  .thing.light::before { content: ""; position: absolute; inset: -10px; border-radius: 50%; }
+  .thing.light.s-strip::before { inset: -14px -4px; border-radius: 8px; }
+  .three-host { aspect-ratio: 4 / 3; }
+  .add-wide { width: 100%; padding: 12px; font-size: 15px; }
+
+  /* A light's or a piece of furniture's details come up from the bottom instead of covering the plan */
+  .popover {
+    position: fixed !important; left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important;
+    width: auto; z-index: 40; max-height: 50vh; overflow: auto; overscroll-behavior: contain;
+    border-radius: 20px 20px 0 0; border-width: 1px 0 0;
+    padding: 18px max(16px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    box-shadow: 0 -14px 44px var(--shadow); background: var(--panel); gap: 12px;
+    animation: sheet-up .2s ease-out;
+  }
+  .popover header b { font-size: 16px; }
+
+  /* Lights, furniture and players slide up as a sheet */
+  .sheet-backdrop { position: fixed; inset: 0; z-index: 44; background: rgba(2, 4, 10, .6); animation: fade-in .2s ease-out; }
+  .library.sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 45;
+    max-height: 80vh; overflow: auto; overscroll-behavior: contain; gap: 0;
+    border-radius: 20px 20px 0 0; border-width: 1px 0 0; background: var(--panel);
+    padding: 0 max(16px, env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    box-shadow: 0 -16px 50px var(--shadow);
+    animation: sheet-up .22s ease-out;
+  }
+  .sheet-head {
+    position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px;
+    padding: 20px 0 12px; background: var(--panel);
+  }
+  .sheet-head::before { content: ""; position: absolute; top: 7px; left: 50%; width: 38px; height: 4px; margin-left: -19px; border-radius: 2px; background: var(--line-2); }
+  .sheet-body { display: grid; gap: 14px; }
+  .sheet .lib-item { padding-top: 11px; padding-bottom: 11px; font-size: 15px; cursor: pointer; }
+  .sheet .lib-item.is-group .nm { font-weight: 600; }
+  .sheet .lib-item .add { font-size: 22px; min-width: 40px; min-height: 34px; margin: -6px -6px -6px 2px; border-radius: 9px; }
+  .sheet .lib-item .add:active { background: var(--raise); }
+  .sheet .furn-chip { padding: 11px 10px; font-size: 14px; cursor: pointer; }
+
+  /* Behaviors: drag-to-reorder doesn't work with a finger, so Move up and Move down do it */
+  .handle, .badge-now { display: none; }
+  .rule-row { padding: 12px; gap: 10px; }
+  .rule-body { padding: 4px 12px 18px; }
+  .rule-body .grid { grid-template-columns: minmax(0, 1fr); }
+  .seg { max-width: 100%; }
+  .time-row input { width: auto; flex: 1 1 100px; }
+  .section-head { padding: 14px 12px 0 !important; }
+
+  /* Connections: a strip to jump between sections */
+  .jump {
+    display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
+    position: sticky; top: calc(var(--head) + env(safe-area-inset-top)); z-index: 15;
+    margin: -12px -14px 14px; padding: 9px 14px;
+    background: var(--header-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--line);
+  }
+  .jump::-webkit-scrollbar { display: none; }
+  .jump button {
+    flex: none; display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    border: 1px solid var(--line-2); background: var(--panel-2); color: var(--text);
+    border-radius: 999px; padding: 7px 13px; font-size: 13.5px; font-weight: 500;
+  }
+  .jump .count { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+  .conn { gap: 24px; }
+  .conn h1 { font-size: 22px; }
+  .sys-head { padding: 14px 14px 14px 12px; gap: 10px; }
+  .sys-head h3 { font-size: 15.5px; }
+  .sys-body { padding: 0 14px 16px 12px; }
+  .fields, .upload-grid { grid-template-columns: minmax(0, 1fr); }
+  .backups { max-height: none; }
+
+  /* Activity */
+  .log li { grid-template-columns: 60px 12px minmax(0, 1fr); gap: 8px; padding: 10px 12px; }
+  .add-to-room { display: block; margin: 6px 0 0; }
+}
+@keyframes sheet-up { from { transform: translateY(30px); opacity: .5; } }
+@keyframes fade-in { from { opacity: 0; } }

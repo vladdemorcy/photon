@@ -22,10 +22,24 @@ const S = {
   expanded: new Set(),
   openRule: null, openSys: null, results: {},
   drag: null,
+  // Phones get a different arrangement: one room section at a time, and lights, furniture
+  // and players in a panel that slides up from the bottom instead of a side column.
+  mobile: false,
+  roomTab: localGet('photon.roomTab') || 'layout', // layout | behaviors | players | settings
+  sheet: null, // the bottom panel on phones: lights | furniture | players
 };
 
 const app = document.getElementById('app');
 let view3d = null;
+
+// Phones, and tablets used by touch, which have the same trouble dragging across a long page.
+const phoneQuery = window.matchMedia('(max-width: 820px), (max-width: 1180px) and (pointer: coarse)');
+S.mobile = phoneQuery.matches;
+phoneQuery.addEventListener('change', () => {
+  S.mobile = phoneQuery.matches;
+  S.sheet = null;
+  if (S.config) render();
+});
 
 // ---------------------------------------------------------------------------
 // helpers
@@ -200,7 +214,12 @@ let shownWarnings = new Set();
 S.dirty = false;
 S.pointerActive = false;
 
-function setSaveState(text, err = false) { const el = $('#saveState'); el.textContent = text; el.classList.toggle('err', err); }
+function setSaveState(text, err = false) {
+  const el = $('#saveState');
+  el.textContent = text;
+  el.classList.toggle('err', err);
+  el.classList.toggle('quiet', text === 'All changes saved'); // phones only show it while something is happening
+}
 
 async function saveNow() {
   const body = JSON.stringify(S.config);
@@ -310,12 +329,15 @@ function route() {
     S.sel = null;
   }
   $$('.tabs a').forEach(a => a.setAttribute('aria-current', a.dataset.view === S.view ? 'page' : 'false'));
+  $('#pageTitle').textContent = { rooms: 'Rooms', connections: 'Connections', activity: 'Activity' }[S.view];
   render();
 }
 window.addEventListener('hashchange', route);
 
 function render() {
   if (view3d && !(S.view === 'rooms' && S.stageMode === '3d')) { view3d.dispose(); view3d = null; }
+  if (S.view !== 'rooms') { S.sheet = null; document.body.classList.remove('pop-open'); }
+  document.body.classList.toggle('sheet-open', Boolean(S.mobile && S.sheet));
   if (S.view === 'connections') renderConnections();
   else if (S.view === 'activity') renderActivity();
   else renderRooms();
@@ -381,13 +403,14 @@ function renderRooms() {
       <aside class="panel side" aria-label="Rooms">
         <h2>Rooms</h2>
         <ul class="room-list" id="roomList">${c.rooms.map(roomLink).join('')}</ul>
-        <button class="btn" data-act="new-room" style="width:100%">New room</button>
+        <button class="btn new-room" data-act="new-room">New room</button>
       </aside>
       <div class="editor">
         ${!p.lights || !p.media ? `<div class="panel setup-strip"><span>${!p.lights ? 'No lighting system is connected yet.' : 'No media server is connected yet, so nothing will trigger these behaviors.'}</span><span class="spacer"></span><a class="btn primary sm" href="#connections">Open Connections</a></div>` : ''}
         ${editorHtml(r)}
       </div>
-      <aside class="panel library" id="library" aria-label="Lights, furniture and players">${libraryHtml(r)}</aside>
+      ${S.mobile ? `<div class="sheet-backdrop" id="sheetBackdrop" ${S.sheet ? '' : 'hidden'}></div>` : ''}
+      <aside class="panel library ${S.mobile ? 'sheet' : ''}" id="library" aria-label="Lights, furniture and players" ${S.mobile && !S.sheet ? 'hidden' : ''}>${libraryHtml(r)}</aside>
     </div>`;
   bindRooms(r);
 }
@@ -436,6 +459,18 @@ function usersHtml(r) {
     </div>`;
 }
 
+// On phones a room shows one of these at a time.
+const ROOM_TABS = [['layout', 'Layout'], ['behaviors', 'Behaviors'], ['players', 'Players'], ['settings', 'Settings']];
+const paneAttr = name => `data-pane="${name}" ${S.mobile && S.roomTab !== name ? 'hidden' : ''}`;
+
+function roomTabsHtml(r) {
+  if (!S.mobile) return '';
+  const count = { behaviors: r.rules.length, players: r.players.length };
+  return `<nav class="room-tabs" role="tablist" aria-label="Room sections">
+    ${ROOM_TABS.map(([k, label]) => `<button role="tab" data-room-tab="${k}" aria-selected="${S.roomTab === k}">${label}${count[k] != null ? `<span class="count">${count[k]}</span>` : ''}</button>`).join('')}
+  </nav>`;
+}
+
 function editorHtml(r) {
   return `
     <div class="room-head">
@@ -444,8 +479,9 @@ function editorHtml(r) {
       ${nowPlayingHtml(r)}
       ${filterNoteHtml(r)}
     </div>
+    ${roomTabsHtml(r)}
 
-    <section class="panel stage" aria-label="Room layout">
+    <section class="panel stage" aria-label="Room layout" ${paneAttr('layout')}>
       <div class="stage-bar">
         <div class="seg" role="group" aria-label="View">
           <button data-stage="plan" aria-pressed="${S.stageMode === 'plan'}">Floor plan</button>
@@ -459,13 +495,14 @@ function editorHtml(r) {
         <button class="btn sm" data-act="simulate" title="Sends this event to the room as if your media server did, so your real lights change">Run on real lights</button>
       </div>
       <p class="stage-note" id="stageNote"></p>
-      <div class="plan-wrap" id="planWrap">${S.stageMode === '3d' ? `<div class="three-host" id="threeHost"><span class="hint">Drag to orbit, scroll to zoom. Arrange things on the floor plan.</span></div>` : planHtml(r)}</div>
+      <div class="plan-wrap" id="planWrap">${S.stageMode === '3d' ? `<div class="three-host" id="threeHost"><span class="hint">${S.mobile ? 'Drag to turn, pinch to zoom.' : 'Drag to orbit, scroll to zoom.'} Arrange things on the floor plan.</span></div>` : planHtml(r)}</div>
+      ${S.mobile ? '<button class="btn add-wide" data-open-sheet="lights">Add lights or furniture</button>' : ''}
     </section>
 
-    <section class="panel" aria-label="Behaviors">
+    <section class="panel" aria-label="Behaviors" ${paneAttr('behaviors')}>
       <div class="section-head" style="padding:14px 14px 0">
         <h2>Behaviors</h2>
-        <p>When several match, the one nearest the top wins. Drag to reorder.</p>
+        <p>When several match, the one nearest the top wins. ${S.mobile ? 'Open one to move it up or down.' : 'Drag to reorder.'}</p>
         <span class="spacer"></span>
         <button class="btn sm" data-act="add-rule">Add behavior</button>
       </div>
@@ -473,10 +510,11 @@ function editorHtml(r) {
     </section>
 
     <div class="two-col">
-      <section class="panel block" aria-label="Players">
+      <section class="panel block" aria-label="Players" ${paneAttr('players')}>
         <h2>Players in this room</h2>
-        <p class="muted small">Drop the TVs, streaming boxes or apps that are in this room. Playback on them drives this room's lights.</p>
-        <div class="dropzone" id="playerZone">${r.players.map(k => playerChip(k)).join('') || '<span class="empty">Drag a player here from the list</span>'}</div>
+        <p class="muted small">${S.mobile ? 'The TVs, streaming boxes and apps in this room. Playback on them drives the lights here.' : "Drop the TVs, streaming boxes or apps that are in this room. Playback on them drives this room's lights."}</p>
+        <div class="dropzone" id="playerZone">${r.players.map(k => playerChip(k)).join('') || `<span class="empty">${S.mobile ? 'No players yet.' : 'Drag a player here from the list'}</span>`}</div>
+        ${S.mobile ? '<button class="btn add-wide" data-open-sheet="players">Add a player</button>' : ''}
         <details>
           <summary class="muted small" style="cursor:pointer">Add a player by its ID</summary>
           <div class="time-row" style="margin-top:8px">
@@ -487,7 +525,7 @@ function editorHtml(r) {
         </details>
       </section>
 
-      <section class="panel block" aria-label="Room settings">
+      <section class="panel block" aria-label="Room settings" ${paneAttr('settings')}>
         <h2>Room settings</h2>
         <div class="settings-grid">
           <label class="field"><span>Width (ft)</span><input type="number" min="6" max="${r.layout.outdoor ? 200 : 60}" data-layout="width" value="${r.layout.width}"></label>
@@ -587,7 +625,7 @@ function planHtml(r) {
       <div class="glow-layer" id="glowLayer"></div>
       ${L.furniture.filter(f => f.kind !== 'rug').map(f => furnitureHtml(r, f)).join('')}
       ${lights.map(l => lightHtml(r, l.key, l.group)).join('')}
-      ${r.targets.length ? '' : `<div class="plan-empty"><p>Drag a room or light from the list on the right and drop it where it is. Furniture is in the list too.</p></div>`}
+      ${r.targets.length ? '' : `<div class="plan-empty"><p>${S.mobile ? 'Tap Add lights or furniture below, then drag each one to where it is in the room.' : 'Drag a room or light from the list on the right and drop it where it is. Furniture is in the list too.'}</p></div>`}
       <span class="plan-dim">${L.width} × ${L.depth} ft</span>
     </div>
     ${popoverHtml(r)}`;
@@ -609,7 +647,7 @@ function popoverHtml(r) {
     if (!f) return '';
     const def = FURNITURE[f.kind];
     return `<div class="popover" id="popover" style="${popoverPos(r, f.x, f.y)}">
-      <header><b>${esc(def.label)}</b></header>
+      <header><b>${esc(def.label)}</b><span class="spacer"></span><button class="btn ghost sm" data-act="close-pop">Done</button></header>
       <label class="field"><span>Name (optional)</span><input data-fp="label" value="${esc(f.label)}" placeholder="${esc(def.label)}"></label>
       <div class="settings-grid">
         <label class="field"><span>Width (ft)</span><input type="number" step="0.5" min="0.5" data-fp="w" value="${f.w}"></label>
@@ -628,7 +666,7 @@ function popoverHtml(r) {
   const group = pl.group ? targetInfo(pl.group) : null;
   const screen = L.furniture.find(f => SCREEN_KINDS.includes(f.kind));
   return `<div class="popover" id="popover" style="${popoverPos(r, it.x, it.y)}">
-    <header><span class="dot" style="--c:${brandColor(t.pid)}"></span><b>${esc(t.name)}</b></header>
+    <header><span class="dot" style="--c:${brandColor(t.pid)}"></span><b>${esc(t.name)}</b><span class="spacer"></span><button class="btn ghost sm" data-act="close-pop">Done</button></header>
     <p class="muted small">${esc(providerLabel(t.pid))}, ${esc(TYPE_LABEL[t.type] || t.type)}${t.detail ? `, ${esc(t.detail)}` : ''}</p>
     ${group ? `<p class="small">Part of <b>${esc(group.name)}</b>. Photon controls the whole group together.</p>` : ''}
     <div class="seg" role="group" aria-label="Shape">${Object.entries(SHAPE_LABEL).map(([k, v]) => `<button data-shape="${k}" aria-pressed="${it.shape === k}">${v}</button>`).join('')}</div>
@@ -812,6 +850,8 @@ function ruleBodyHtml(r, rule) {
     ${['state', 'scene', 'restore', 'off'].includes(a.type) ? `<label class="field" style="max-width:200px"><span>Fade (seconds)</span><input type="number" min="0" max="60" step="0.5" data-rf="action.transition" value="${a.transition}"></label>` : ''}
     <div class="actions-row">
       ${['state', 'off', 'scene'].includes(a.type) ? '<button class="btn sm" data-act="try-rule">Try on the lights</button>' : ''}
+      <button class="btn sm" data-act="move-up" ${r.rules[0] === rule ? 'disabled' : ''}>Move up</button>
+      <button class="btn sm" data-act="move-down" ${r.rules[r.rules.length - 1] === rule ? 'disabled' : ''}>Move down</button>
       <button class="btn sm" data-act="dup-rule">Duplicate</button>
       <button class="btn sm danger" data-act="del-rule">Delete</button>
     </div>
@@ -912,6 +952,27 @@ function libraryHtml(r) {
         }).join('') || `<p class="hint">${m.id === 'plex' && !S.config.media.plex?.token ? 'Sign in to Plex in Connections to list your players.' : 'Players show up here after they play something.'}</p>`}
       </div>`).join('');
 
+  if (S.mobile) {
+    const tabs = [['lights', 'Lights'], ['furniture', 'Furniture'], ['players', 'Players']];
+    const body = {
+      lights: `<p class="hint">Tap a light to put it in the room, or + to add a whole room of lights. Then drag it to where it is.</p>
+        ${lights}<button class="btn sm ghost" data-act="refresh-lib">Refresh list</button>`,
+      furniture: `<p class="hint">Tap a piece to add it. To move a piece on the plan, tap it first, then drag it. Tapping it also lets you turn, resize or remove it.</p>${furniture}`,
+      players: `${players}
+        <p class="hint">Only players on your home network are listed.${S.hiddenPlayers ? ` ${S.hiddenPlayers} hidden. <button class="linkish" data-act="unhide-players">Show them again</button>` : ''}</p>
+        ${S.playerErrors.map(e => `<p class="lib-error">${esc(e)}</p>`).join('')}`,
+    }[S.sheet] || '';
+    return `
+      <header class="sheet-head">
+        <div class="seg" role="tablist" aria-label="Add to this room">
+          ${tabs.map(([k, label]) => `<button role="tab" data-sheet-tab="${k}" aria-pressed="${S.sheet === k}">${label}</button>`).join('')}
+        </div>
+        <span class="spacer"></span>
+        <button class="btn ghost sm" data-act="close-sheet">Done</button>
+      </header>
+      <div class="sheet-body">${body}</div>`;
+  }
+
   return `
     <div><h2>Lights</h2><p class="hint">Click a room to see what's in it. Drag onto the floor plan, and drag back here to remove.</p></div>
     ${lights}
@@ -950,10 +1011,19 @@ function bindRooms(r) {
   $('.room-head').addEventListener('click', e => {
     if (!e.target.closest('[data-act="show-settings"]')) return;
     e.preventDefault();
+    if (S.mobile) { showRoomTab('settings'); return; }
     const box = $('[aria-label="Room settings"]');
     box?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     box?.classList.add('flash'); setTimeout(() => box?.classList.remove('flash'), 1600);
   });
+
+  $('.room-tabs')?.addEventListener('click', e => {
+    const b = e.target.closest('[data-room-tab]');
+    if (b) showRoomTab(b.dataset.roomTab);
+  });
+  $$('[data-open-sheet]').forEach(b => b.addEventListener('click', () => openSheet(b.dataset.openSheet)));
+  if (S.mobile) $('#roomList [aria-current="true"]')?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  $('#sheetBackdrop')?.addEventListener('click', closeSheet);
 
   $$('[data-stage]').forEach(b => b.addEventListener('click', () => { S.stageMode = b.dataset.stage; localSet('photon.stage', S.stageMode); S.sel = null; render(); }));
   $$('[data-preview]').forEach(b => b.addEventListener('click', () => {
@@ -982,6 +1052,39 @@ function bindRooms(r) {
   bindPlayers(r);
   bindSettings(r);
   bindLibrary(r);
+}
+
+// Phones: one room section at a time.
+function showRoomTab(tab) {
+  S.roomTab = tab;
+  localSet('photon.roomTab', tab);
+  $$('[data-pane]').forEach(el => { el.hidden = el.dataset.pane !== tab; });
+  $$('[data-room-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.roomTab === tab));
+  const tabs = $('.room-tabs');
+  if (tabs && tabs.getBoundingClientRect().top < 0) window.scrollTo({ top: window.scrollY + tabs.getBoundingClientRect().top - 60 });
+}
+
+// Phones: the lights, furniture and players list slides up from the bottom.
+function openSheet(tab) {
+  const r = room();
+  const lib = $('#library');
+  if (!r || !lib) return;
+  S.sheet = tab;
+  lib.innerHTML = libraryHtml(r);
+  lib.hidden = false;
+  lib.scrollTop = 0;
+  $('#sheetBackdrop').hidden = false;
+  document.body.classList.add('sheet-open');
+  $('[data-act="close-sheet"]', lib)?.focus({ preventScroll: true });
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.sheet) closeSheet(); });
+function closeSheet() {
+  S.sheet = null;
+  const lib = $('#library');
+  if (lib && S.mobile) lib.hidden = true;
+  const bd = $('#sheetBackdrop');
+  if (bd) bd.hidden = true;
+  document.body.classList.remove('sheet-open');
 }
 
 async function mount3d() {
@@ -1015,7 +1118,7 @@ function bindPlan(r) {
 
   plan.addEventListener('pointerdown', e => {
     const el = e.target.closest('.thing');
-    if (!el) { if (S.sel) { S.sel = null; rerenderPlan(r); } return; }
+    if (!el) return;
     e.preventDefault();
     el.setPointerCapture(e.pointerId);
     S.pointerActive = true;
@@ -1041,6 +1144,8 @@ function bindPlan(r) {
       el.removeEventListener('pointerup', onUp);
       el.removeEventListener('pointercancel', onUp);
       lib.classList.remove('remove-zone');
+      // The browser took over to scroll the page: not a tap, and not a move.
+      if (ev.type === 'pointercancel' && !moved) return;
       if (moved && document.elementsFromPoint(ev.clientX, ev.clientY).includes(lib)) {
         if (el.dataset.thing === 'furn') removeFurniture(r, el.dataset.id);
         else removeLight(r, el.dataset.key);
@@ -1054,6 +1159,12 @@ function bindPlan(r) {
     el.addEventListener('pointermove', onMove);
     el.addEventListener('pointerup', onUp);
     el.addEventListener('pointercancel', onUp);
+  });
+
+  // A tap on an empty spot closes the details. On click rather than pointerdown, so a
+  // finger scrolling the page past the plan doesn't count.
+  plan.addEventListener('click', e => {
+    if (!e.target.closest('.thing') && S.sel) { S.sel = null; rerenderPlan(r); }
   });
 
   // keyboard: arrows move, R rotates furniture, Enter opens details, Delete removes
@@ -1096,6 +1207,22 @@ function bindPlan(r) {
   });
 
   bindPopover(r);
+  keepPlanInView();
+}
+
+// Phones: a light's or furniture's details cover the bottom of the screen, so move the plan
+// up to where it stays visible above them.
+function keepPlanInView() {
+  const open = Boolean(S.mobile && $('#popover'));
+  document.body.classList.toggle('pop-open', open);
+  if (!open) return;
+  const plan = $('#plan');
+  const tabs = $('.room-tabs');
+  // where the sticky room tabs end once the page scrolls (header plus tabs)
+  const top = (tabs ? (parseFloat(getComputedStyle(tabs).top) || 0) + tabs.offsetHeight : 60) + 8;
+  const box = plan.getBoundingClientRect();
+  const sheetTop = $('#popover').getBoundingClientRect().top;
+  if (box.top < top - 1 || box.bottom > sheetTop) window.scrollTo({ top: window.scrollY + box.top - top });
 }
 
 function bindPopover(r) {
@@ -1123,6 +1250,7 @@ function bindPopover(r) {
     });
     pop.addEventListener('click', e => {
       const a = e.target.closest('[data-act]')?.dataset.act;
+      if (a === 'close-pop') { S.sel = null; rerenderPlan(r); return; }
       if (a === 'rot-left' || a === 'rot-right') { f.rot = (f.rot + (a === 'rot-left' ? -90 : 90) + 360) % 360; apply(); rerenderPlan(r); }
       else if (a === 'dup-furn') addFurniture(r, f.kind, { x: clamp(f.x + 1.5, 0, L.width), y: clamp(f.y + 1.5, 0, L.depth) }, { ...f });
       else if (a === 'remove-furn') removeFurniture(r, f.id);
@@ -1149,6 +1277,7 @@ function bindPopover(r) {
   pop.addEventListener('click', async e => {
     const b = e.target.closest('button');
     if (!b) return;
+    if (b.dataset.act === 'close-pop') { S.sel = null; rerenderPlan(r); return; }
     if (b.dataset.shape) { it.shape = b.dataset.shape; if (it.shape === 'strip' && !it.len) it.len = 6; commit(); rerenderPlan(r); }
     else if (b.dataset.h) { it.h = round1(Number(b.dataset.h)); commit(); rerenderPlan(r); }
     else if (b.dataset.act === 'snap-wall') {
@@ -1208,6 +1337,7 @@ function addTarget(r, key, pos) {
   }
   r.targets.push(key);
   S.sel = t.members.length ? null : { type: 'light', key };
+  S.sheet = null;
   commit();
   render();
 }
@@ -1237,6 +1367,7 @@ function addFurniture(r, kind, pos, copy) {
   }
   r.layout.furniture.push(f);
   S.sel = { type: 'furn', id: f.id };
+  S.sheet = null;
   commit();
   render();
 }
@@ -1303,6 +1434,14 @@ function bindRules(r) {
       rule.action.palette.push(randomColorHex()); randomCache.clear(); commit(); rerenderRule(rule); updatePlanLook();
     } else if (b.dataset.act === 'shuffle') { randomCache.clear(); updatePlanLook(); rerenderRule(rule); }
     else if (b.dataset.act === 'del-rule') { r.rules = r.rules.filter(x => x !== rule); commit(); render(); }
+    else if (b.dataset.act === 'move-up' || b.dataset.act === 'move-down') {
+      const i = r.rules.indexOf(rule);
+      const j = b.dataset.act === 'move-up' ? i - 1 : i + 1;
+      if (j < 0 || j >= r.rules.length) return;
+      [r.rules[i], r.rules[j]] = [r.rules[j], r.rules[i]];
+      commit(); render();
+      $(`[data-rule="${rule.id}"] [data-act="${b.dataset.act}"]`)?.focus();
+    }
     else if (b.dataset.act === 'dup-rule') {
       const copy = { ...JSON.parse(JSON.stringify(rule)), id: uid(), name: `${rule.name} (copy)` };
       r.rules.splice(r.rules.indexOf(rule) + 1, 0, copy); S.openRule = copy.id; commit(); render();
@@ -1393,6 +1532,7 @@ function addPlayer(r, key, name) {
   // Remember the name too: a TV you cast to can come back under a different ID.
   const n = name || S.players.find(p => p.key === key)?.name;
   if (n) r.playerNames = { ...(r.playerNames || {}), [key]: n };
+  S.sheet = null;
   commit(); render();
 }
 
@@ -1481,10 +1621,17 @@ function bindLibrary(r) {
   });
   lib.addEventListener('dragend', () => { S.drag = null; $('#plan')?.classList.remove('drop-ok'); $('#playerZone')?.classList.remove('over'); });
   lib.addEventListener('click', e => {
+    const tab = e.target.closest('[data-sheet-tab]');
+    if (tab) { S.sheet = tab.dataset.sheetTab; lib.innerHTML = libraryHtml(r); lib.scrollTop = 0; return; }
+    if (e.target.closest('[data-act="close-sheet"]')) { closeSheet(); return; }
     const at = e.target.closest('[data-add-target]');
     const ap = e.target.closest('[data-add-player]');
     const af = e.target.closest('[data-drag-furn]');
     const ex = e.target.closest('[data-expand]');
+    // On a phone, tapping anywhere on a light or player adds it (rooms of lights open instead).
+    const row = S.mobile && !at && !ap && !ex && !e.target.closest('button') ? e.target.closest('.lib-item:not(.in-room)') : null;
+    if (row?.dataset.dragTarget) { addTarget(r, row.dataset.dragTarget); return; }
+    if (row?.dataset.dragPlayer) { addPlayer(r, row.dataset.dragPlayer); return; }
     if (at) addTarget(r, at.dataset.addTarget);
     else if (ap) addPlayer(r, ap.dataset.addPlayer);
     else if (e.target.closest('[data-hide-player]')) {
@@ -1636,20 +1783,29 @@ async function refreshTvStatus() {
 function renderConnections() {
   const c = S.config;
   const sun = S.meta.sun;
-  app.innerHTML = `<div class="conn">
-    <section>
+  const on = list => list.filter(x => S.config[x.kind]?.[x.id]?.enabled).length;
+  const lightsOn = on(S.meta.lighting.map(x => ({ kind: 'lighting', id: x.id })));
+  const mediaOn = on(S.meta.media.filter(x => x.group !== 'tv').map(x => ({ kind: 'media', id: x.id })));
+  const tvsOn = on(S.meta.media.filter(x => x.group === 'tv').map(x => ({ kind: 'media', id: x.id })));
+  const jump = [['conn-lights', 'Lights', lightsOn], ['conn-media', 'Media server', mediaOn], ['conn-tvs', 'Smart TVs', tvsOn],
+    ['conn-location', 'Location'], ['tlsBox', 'HTTPS'], ['backupBox', 'Saved versions'], ['conn-webhook', 'Webhook key']];
+  app.innerHTML = `<nav class="jump" aria-label="Jump to">
+    ${jump.map(([id, label, n]) => `<button data-jump="${id}">${label}${n ? `<span class="count">${n} on</span>` : ''}</button>`).join('')}
+  </nav>
+  <div class="conn">
+    <section id="conn-lights">
       <header><h1>Lights</h1><p>Turn on each lighting system you have. Its color here is how you'll spot its lights in rooms.</p></header>
       ${S.meta.lighting.map(s => sysHtml('lighting', s)).join('')}
     </section>
-    <section>
+    <section id="conn-media">
       <header><h1>Media server</h1><p>Photon listens for play, pause and stop from your server. Set up the webhook in your server, or for Jellyfin and Emby let Photon check in every couple of seconds.</p></header>
       ${S.meta.media.filter(s => s.group !== 'tv').map(s => sysHtml('media', s)).join('')}
     </section>
-    <section>
+    <section id="conn-tvs">
       <header><h1>Smart TVs</h1><p>Lights can also follow whatever is playing on a TV or streaming box, from any app: Netflix, YouTube, Disney+ and the rest. Turn on the kinds you have, then pick the TV as a room's player.</p></header>
       ${S.meta.media.filter(s => s.group === 'tv').map(s => sysHtml('media', s)).join('')}
     </section>
-    <section class="panel block">
+    <section class="panel block" id="conn-location">
       <h2>Your location</h2>
       <p class="muted small">Used only to work out sunrise and sunset for time-based behaviors. Today: dawn ${sun.dawn}, sunrise ${sun.sunrise}, sunset ${sun.sunset}, dusk ${sun.dusk}${sun.usingFallback ? ' (typical times until you set a location)' : ''}.</p>
       <div class="settings-grid">
@@ -1668,12 +1824,17 @@ function renderConnections() {
         <input type="file" id="importFile" accept=".json,application/json" hidden></div>
       <p class="muted small">Moving from a copy you ran by hand? Pick the <b>config.json</b> in its <b>data</b> folder. Rooms, layouts, behaviors, Plex sign-in and light keys all come across.</p>
     </section>
-    <section class="panel block">
+    <section class="panel block" id="conn-webhook">
       <h2>Webhook security</h2>
       <p class="muted small">Each webhook address contains a secret key so only your server can trigger Photon. Make a new key if an address leaked, then update it in your media server.</p>
       <div><button class="btn sm danger" data-act="regen">Make a new key</button></div>
     </section>
   </div>`;
+  $('.jump', app).addEventListener('click', e => {
+    const b = e.target.closest('[data-jump]');
+    const el = b && document.getElementById(b.dataset.jump);
+    if (el) window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - 112, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  });
   bindConnections();
   refreshTvStatus();
   bindTls();
