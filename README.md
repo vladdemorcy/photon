@@ -14,7 +14,7 @@ You can use more than one of each at the same time. A single room can mix Hue an
 
 ## Install on Windows (easiest)
 
-Run **Photon-Setup-1.4.4.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
+Run **Photon-Setup-1.4.5.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
 
 - **Node.js:** checks for Node.js 18 or newer. If it's missing or too old, setup downloads the current LTS version from nodejs.org, checks it against nodejs.org's published SHA-256 checksums, and installs it to `C:\Program Files\nodejs`.
 - **Photon:** installs Photon to `C:\Program Files\Photon`. Everything it needs is included.
@@ -28,7 +28,7 @@ To update, run a newer Photon-Setup the same way. To remove Photon, use Settings
 **Running setup from a script.** Setup also runs without a window:
 
 ```
-Photon-Setup-1.4.4.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
+Photon-Setup-1.4.5.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
 "C:\Program Files\Photon\Uninstall Photon.exe" -Quiet [-DeleteData]
 ```
 
@@ -36,7 +36,7 @@ Windows SmartScreen may warn that the installer is from an unknown publisher, be
 
 ## Install on a Mac
 
-Open **Photon-1.4.4.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
+Open **Photon-1.4.5.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
 
 - **Node.js:** downloads its own copy from nodejs.org the first time (checked against nodejs.org's checksums) and keeps it in `/Library/Photon/node`, so nothing else on your Mac changes.
 - **Photon:** installs to `/Library/Photon` and runs as a background service (a launchd daemon, `com.photon.server`). It starts with the Mac, keeps running when nobody is logged in, and restarts if it stops.
