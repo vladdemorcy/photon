@@ -104,6 +104,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--cyan); outline-offset: 2px; border-radius: 6px; }
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
+/* Room for the phone's status bar, notch and gesture bar. In Photon's Android app the app
+   already keeps the page clear of those, so the page adds nothing (see the in-app class). */
+:root { --safe-top: env(safe-area-inset-top, 0px); --safe-bottom: env(safe-area-inset-bottom, 0px); --safe-left: env(safe-area-inset-left, 0px); --safe-right: env(safe-area-inset-right, 0px); }
+:root.in-app { --safe-top: 0px; --safe-bottom: 0px; --safe-left: 0px; --safe-right: 0px; }
 .sr-only { position: absolute; width: 1px !important; height: 1px !important; padding: 0 !important; border: 0 !important; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* ---- Top bar ---- */
@@ -657,7 +661,7 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
    One row of header, tabs along the bottom where thumbs are, rooms as a strip of pills,
    one room section at a time, and lists that slide up from the bottom. */
 @media (max-width: 820px), (max-width: 1180px) and (pointer: coarse) {
-  :root { --head: 52px; --tabbar: calc(62px + env(safe-area-inset-bottom)); }
+  :root { --head: 52px; --tabbar: calc(62px + var(--safe-bottom)); }
   body { padding-bottom: var(--tabbar); }
   body.signed-out { padding-bottom: 0; }
   .auth { margin-top: 2vh; padding: 18px; }
@@ -667,8 +671,8 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
   /* No blur on the header here: a blurred parent would trap the fixed tab bar inside it. */
   .top {
     backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg);
-    flex-wrap: nowrap; gap: 10px; height: calc(var(--head) + env(safe-area-inset-top));
-    padding: env(safe-area-inset-top) max(14px, env(safe-area-inset-right)) 0 max(14px, env(safe-area-inset-left));
+    flex-wrap: nowrap; gap: 10px; height: calc(var(--head) + var(--safe-top));
+    padding: var(--safe-top) max(14px, var(--safe-right)) 0 max(14px, var(--safe-left));
   }
   .brand-word, .version { display: none; }
   .brand-mark { width: 30px; height: 30px; }
@@ -683,7 +687,7 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
   .tabs {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
     display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
-    padding: 6px max(8px, env(safe-area-inset-right)) calc(6px + env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
+    padding: 6px max(8px, var(--safe-right)) calc(6px + var(--safe-bottom)) max(8px, var(--safe-left));
     background: var(--header-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
     border-top: 1px solid var(--line);
   }
@@ -693,7 +697,7 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
   .tabs a[aria-current="page"] svg { color: var(--cyan); filter: drop-shadow(0 0 7px color-mix(in srgb, var(--cyan) 55%, transparent)); }
   .toast { bottom: calc(var(--tabbar) + 12px); }
 
-  main { padding: 12px max(14px, env(safe-area-inset-right)) 24px max(14px, env(safe-area-inset-left)); }
+  main { padding: 12px max(14px, var(--safe-right)) 24px max(14px, var(--safe-left)); }
   .btn { padding: 9px 14px; }
   .btn.sm { padding: 7px 12px; font-size: 14px; }
   .chip { padding: 7px 12px; font-size: 14px; }
@@ -727,7 +731,7 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
   .now-playing, .filter-note { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .room-tabs {
-    position: sticky; top: calc(var(--head) + env(safe-area-inset-top)); z-index: 15;
+    position: sticky; top: calc(var(--head) + var(--safe-top)); z-index: 15;
     display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px;
     margin: 0 -14px; padding: 6px 10px;
     background: var(--header-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
@@ -762,7 +766,7 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
     position: fixed !important; left: 0 !important; right: 0 !important; top: auto !important; bottom: 0 !important;
     width: auto; z-index: 40; max-height: 50vh; overflow: auto; overscroll-behavior: contain;
     border-radius: 20px 20px 0 0; border-width: 1px 0 0;
-    padding: 18px max(16px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    padding: 18px max(16px, var(--safe-right)) calc(16px + var(--safe-bottom)) max(16px, var(--safe-left));
     box-shadow: 0 -14px 44px var(--shadow); background: var(--panel); gap: 12px;
     animation: sheet-up .2s ease-out;
   }
@@ -774,7 +778,7 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
     position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 45;
     max-height: 80vh; overflow: auto; overscroll-behavior: contain; gap: 0;
     border-radius: 20px 20px 0 0; border-width: 1px 0 0; background: var(--panel);
-    padding: 0 max(16px, env(safe-area-inset-right)) calc(18px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    padding: 0 max(16px, var(--safe-right)) calc(18px + var(--safe-bottom)) max(16px, var(--safe-left));
     box-shadow: 0 -16px 50px var(--shadow);
     animation: sheet-up .22s ease-out;
   }
@@ -802,7 +806,7 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
   /* Connections: a strip to jump between sections */
   .jump {
     display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none;
-    position: sticky; top: calc(var(--head) + env(safe-area-inset-top)); z-index: 15;
+    position: sticky; top: calc(var(--head) + var(--safe-top)); z-index: 15;
     margin: -12px -14px 14px; padding: 9px 14px;
     background: var(--header-glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--line);
