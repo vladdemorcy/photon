@@ -1,0 +1,187 @@
+# Builds the Windows and Mac installers and runs them for real on GitHub's Windows and Mac
+# machines: install with a password, check sign-in and the security settings, update, and
+# remove. Also runs the sign-in and request protection tests against Photon on Linux.
+# Runs when Photon or an installer changes, or by hand from the Actions tab.
+name: Installers
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'installer/**'
+      - 'src/**'
+      - 'public/**'
+      - 'test/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/installers.yml'
+
+concurrency:
+  group: installers-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  security-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: npm ci --no-audit --no-fund
+      - name: Sign-in and request protection tests
+        run: |
+          mkdir -p "$RUNNER_TEMP/at"
+          node test/mocks.js > "$RUNNER_TEMP/mocks.log" 2>&1 &
+          CONFIG_PATH="$RUNNER_TEMP/at/config.json" PORT=18820 node src/server.js > "$RUNNER_TEMP/photon.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:18820/api/version >/dev/null && break; sleep 1; done
+          node test/auth-test.js http://127.0.0.1:18820 "$RUNNER_TEMP/at"
+      - name: Photon's log
+        if: always()
+        run: cat "$RUNNER_TEMP/photon.log" || true
+      - name: Known advisories in shipped packages
+        run: npm audit --omit=dev || true
+
+  build-windows:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq nsis
+      - name: Build Photon-Setup.exe
+        run: bash installer/build.sh
+      - uses: actions/upload-artifact@v5
+        with:
+          name: photon-setup-exe
+          path: dist/Photon-Setup-*.exe
+
+  windows:
+    needs: build-windows
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: photon-setup-exe
+          path: dist
+      - name: A password Photon refuses stops the install
+        run: |
+          $exe = (Get-ChildItem dist\Photon-Setup-*.exe).FullName
+          $env:PHOTON_PASSWORD = 'password1234'
+          $p = Start-Process $exe -ArgumentList '-Quiet' -Wait -PassThru
+          $env:PHOTON_PASSWORD = $null
+          if ($p.ExitCode -eq 0) { throw 'setup accepted a common password' }
+          if (Get-Service Photon -ErrorAction SilentlyContinue) { throw 'setup installed anyway' }
+          'PASS: refused with code ' + $p.ExitCode
+      - name: Install with a password
+        run: |
+          $exe = (Get-ChildItem dist\Photon-Setup-*.exe).FullName
+          $env:PHOTON_PASSWORD = 'windows ci lights glow'
+          $p = Start-Process $exe -ArgumentList '-Quiet' -Wait -PassThru
+          $env:PHOTON_PASSWORD = $null
+          Get-Content "$env:ProgramData\Photon\logs\install.log" -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { throw "setup exited with $($p.ExitCode)" }
+      - name: Check the service account and permissions
+        run: |
+          $fail = 0
+          function Check($ok, $what) { if ($ok) { "PASS: $what" } else { "FAIL: $what"; $script:fail++ } }
+          $svc = Get-CimInstance Win32_Service -Filter "Name='Photon'"
+          Check ($svc.StartName -eq 'NT AUTHORITY\LocalService') "service account is $($svc.StartName)"
+          $sid = (sc.exe qsidtype Photon) -join ' '
+          Check ($sid -match 'UNRESTRICTED') "service identity: $sid"
+          $privs = (sc.exe qprivs Photon) -join ' '
+          Check ($privs -notmatch 'SeImpersonatePrivilege' -and $privs -match 'SeChangeNotifyPrivilege') "privileges: $privs"
+          $node = Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Where-Object { $_.CommandLine -match 'server\.js' } | Select-Object -First 1
+          $owner = Invoke-CimMethod -InputObject $node -MethodName GetOwner
+          Check ($owner.User -eq 'LOCAL SERVICE') "Photon runs as $($owner.Domain)\$($owner.User) from $($node.ExecutablePath)"
+          Check ($node.ExecutablePath -like "$env:ProgramFiles\*") 'node.exe is in Program Files'
+          $data = (icacls "$env:ProgramData\Photon") -join "`n"
+          Check ($data -match 'NT SERVICE\\Photon:\(OI\)\(CI\)\(M\)' -and $data -notmatch 'BUILTIN\\Users' -and $data -notmatch 'Everyone') "settings folder:`n$data"
+          $app = (icacls "$env:ProgramFiles\Photon") -join "`n"
+          Check ($app -match 'BUILTIN\\Users:\(OI\)\(CI\)\(RX\)' -and $app -notmatch 'Users:\(OI\)\(CI\)\((M|F|W)') "program folder:`n$app"
+          Check (Test-Path "$env:ProgramData\Photon\auth.json") 'password saved'
+          Check (-not (Test-Path "$env:ProgramData\Photon\setup-code")) 'no setup code left over'
+          Check (-not ((Get-Content "$env:ProgramData\Photon\auth.json" -Raw) -match 'windows ci')) 'only a hash is stored'
+          if ($fail) { throw "$fail check(s) failed" }
+      - name: Sign in with the password and save settings
+        run: |
+          python android/test/save-room.py http://127.0.0.1:8787 'windows ci lights glow'
+          if ($LASTEXITCODE) { throw 'sign in or save failed' }
+          Get-Content "$env:ProgramData\Photon\logs\PhotonService.err.log" -Tail 20 -ErrorAction SilentlyContinue
+      - name: Update keeps the password and settings
+        run: |
+          $exe = (Get-ChildItem dist\Photon-Setup-*.exe).FullName
+          $p = Start-Process $exe -ArgumentList '-Quiet' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { Get-Content "$env:ProgramData\Photon\logs\install.log"; throw "update exited with $($p.ExitCode)" }
+          $out = python android/test/save-room.py http://127.0.0.1:8787 'windows ci lights glow'
+          $out
+          if ($LASTEXITCODE -or -not ($out -match 'room already saved: True')) { throw 'password or settings lost in the update' }
+      - name: Remove Photon
+        run: |
+          $p = Start-Process "$env:ProgramFiles\Photon\Uninstall Photon.exe" -ArgumentList '-Quiet', '-DeleteData' -Wait -PassThru
+          Start-Sleep 8
+          if (Get-Service Photon -ErrorAction SilentlyContinue) { throw 'service still there' }
+          'PASS: removed (code ' + $p.ExitCode + ')'
+      - name: Logs
+        if: always()
+        run: |
+          Get-Content "$env:TEMP\Photon-Setup.log" -ErrorAction SilentlyContinue
+          Get-Content "$env:TEMP\Photon-Setup-error.txt" -ErrorAction SilentlyContinue
+
+  mac:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Build Photon.pkg
+        run: bash installer/mac/build-mac.sh
+      - name: Install
+        run: |
+          sudo installer -pkg dist/Photon-*.pkg -target / || { sudo cat "/Library/Application Support/Photon/logs/install.log"; exit 1; }
+          sudo cat "/Library/Application Support/Photon/logs/install.log"
+      - name: Check the service account and permissions
+        run: |
+          fail=0
+          check() { if eval "$1"; then echo "PASS: $2"; else echo "FAIL: $2"; fail=1; fi; }
+          DATA="/Library/Application Support/Photon"
+          PID=$(pgrep -f /Library/Photon/app/src/server.js | head -1)
+          check '[ "$(ps -o user= -p "$PID" | tr -d " ")" = _photon ]' "Photon runs as $(ps -o user= -p "$PID")"
+          check '[ "$(sudo stat -f "%Su %Lp" "$DATA")" = "_photon 700" ]' "settings folder: $(sudo stat -f '%Su %Lp' "$DATA")"
+          check '! cat "$DATA/config.json" >/dev/null 2>&1' "other accounts can't read the settings"
+          check 'sudo test -s "$DATA/setup-code"' "setup code made (no screen to ask for a password)"
+          check '[ "$(dscl . -read /Users/_photon UserShell | awk "{print \$2}")" = /usr/bin/false ]' "service account can't log in"
+          [ $fail = 0 ]
+      - name: Choose the password with the setup code and sign in
+        run: |
+          CODE=$(sudo cat "/Library/Application Support/Photon/setup-code")
+          python3 android/test/save-room.py http://127.0.0.1:8787 'mac ci lights glow' "$CODE"
+      - name: Reset the password with the password tool
+        run: |
+          printf '%s' 'mac ci new password' | sudo env CONFIG_PATH="/Library/Application Support/Photon/config.json" /Library/Photon/node/bin/node /Library/Photon/app/src/password.js set
+          sudo ls -l "/Library/Application Support/Photon"
+          python3 android/test/save-room.py http://127.0.0.1:8787 'mac ci new password' | tee out.txt
+          grep -q 'room already saved: True' out.txt
+      - name: Update keeps the password and settings
+        run: |
+          sudo installer -pkg dist/Photon-*.pkg -target /
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:8787/api/version >/dev/null && break; sleep 1; done
+          python3 android/test/save-room.py http://127.0.0.1:8787 'mac ci new password' | tee out.txt
+          grep -q 'room already saved: True' out.txt
+      - name: Remove Photon
+        run: |
+          sudo /Library/Photon/uninstall.sh --all
+          sleep 3
+          ! curl -sf http://127.0.0.1:8787/api/version
+          ! dscl . -read /Users/_photon >/dev/null 2>&1
+          echo "PASS: removed"
+      - name: Logs
+        if: always()
+        run: sudo sh -c 'tail -n 40 "/Library/Application Support/Photon/logs/"*.log' || true

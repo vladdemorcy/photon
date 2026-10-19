@@ -1,8 +1,11 @@
 #!/bin/sh
 # Photon for Mac, after the files are in place:
 #   1. make sure there's a Node.js for Photon (its own copy in /Library/Photon/node)
-#   2. set up the settings folder, the background service, and the apps
-#   3. start Photon and check it answers
+#   2. set up the settings folder and a hidden account (_photon) for the background service,
+#      so Photon doesn't run as root
+#   3. ask for the password you sign in to Photon with (only a salted scrypt hash is kept)
+#   4. set up the background service and the apps
+#   5. start Photon and check it answers
 set -u
 ROOT="/Library/Photon"
 DATA="/Library/Application Support/Photon"
@@ -44,11 +47,91 @@ else
 fi
 chown -R root:wheel "$ROOT"
 
+# ---- Service account --------------------------------------------------------
+# A hidden system account, like the ones macOS uses for its own services: no password, no
+# shell, no home folder, not shown at the login window. Photon runs as this account.
+SVC=_photon
+if ! dscl . -read "/Users/$SVC" >/dev/null 2>&1; then
+  USED=$( (dscl . -list /Users UniqueID; dscl . -list /Groups PrimaryGroupID) | awk '{print $2}')
+  ID=300
+  while [ $ID -lt 500 ] && echo "$USED" | grep -qx "$ID"; do ID=$((ID + 1)); done
+  [ $ID -lt 500 ] || fail "no free ID for Photon's service account"
+  if ! dscl . -read "/Groups/$SVC" >/dev/null 2>&1; then
+    dscl . -create "/Groups/$SVC" PrimaryGroupID "$ID"
+    dscl . -create "/Groups/$SVC" RealName "Photon"
+    dscl . -create "/Groups/$SVC" Password "*"
+  fi
+  GID=$(dscl . -read "/Groups/$SVC" PrimaryGroupID | awk '{print $2}')
+  dscl . -create "/Users/$SVC"
+  dscl . -create "/Users/$SVC" UniqueID "$ID"
+  dscl . -create "/Users/$SVC" PrimaryGroupID "$GID"
+  dscl . -create "/Users/$SVC" UserShell /usr/bin/false
+  dscl . -create "/Users/$SVC" NFSHomeDirectory /var/empty
+  dscl . -create "/Users/$SVC" RealName "Photon service"
+  dscl . -create "/Users/$SVC" Password "*"
+  dscl . -create "/Users/$SVC" IsHidden 1
+  echo "Created the $SVC service account ($ID)"
+fi
+dscl . -read "/Users/$SVC" UniqueID >/dev/null 2>&1 || fail "couldn't create Photon's service account"
+
 # ---- Settings folder --------------------------------------------------------
-# Only the service (root) and admins via sudo can read it: it holds sign-in tokens.
-mkdir -p "$DATA"
-chown -R root:wheel "$DATA"
+# Only the service account (and admins via sudo) can read it: it holds sign-in tokens and the
+# password hash. Earlier versions ran as root, so hand everything over.
+mkdir -p "$DATA" "$LOGS"
+chown -R "$SVC:$SVC" "$DATA"
 chmod 700 "$DATA"
+touch "$LOGS/service.out.log" "$LOGS/service.err.log"
+chown "$SVC:$SVC" "$LOGS/service.out.log" "$LOGS/service.err.log"
+
+# ---- Password ---------------------------------------------------------------
+# Asks whoever is at the screen, with hidden typing, twice. Photon's password tool checks it
+# against the same rules as the web page and stores the hash. With nobody at the screen (a
+# command line install), Photon asks for a password in the browser instead, with a one-time
+# setup code that only an admin on this Mac can read.
+CONSOLE_ID=$(stat -f %u /dev/console 2>/dev/null)
+CONSOLE_USER=$(stat -f %Su /dev/console 2>/dev/null)
+ICON="/Library/Photon/photon.icns"
+ask_hidden() { # prompt -> the typed text; fails if they chose not to
+  launchctl asuser "$CONSOLE_ID" sudo -u "$CONSOLE_USER" osascript \
+    -e 'on run argv' -e 'tell me to activate' \
+    -e 'set r to display dialog (item 1 of argv) default answer "" with hidden answer with title "Photon" with icon POSIX file (item 2 of argv) buttons {"Choose it later", "OK"} default button "OK" cancel button "Choose it later" giving up after 600' \
+    -e 'if gave up of r then error number -128' -e 'return text returned of r' -e 'end run' "$1" "$ICON" 2>/dev/null
+}
+ask_keep() {
+  launchctl asuser "$CONSOLE_ID" sudo -u "$CONSOLE_USER" osascript \
+    -e 'on run argv' -e 'tell me to activate' \
+    -e 'set r to display dialog "Photon already has a password. Keep it, or choose a new one? (A new one signs everyone out.)" with title "Photon" with icon POSIX file (item 1 of argv) buttons {"Choose a new one", "Keep it"} default button "Keep it" giving up after 600' \
+    -e 'return button returned of r' -e 'end run' "$ICON" 2>/dev/null
+}
+choose_password() {
+  [ -z "${COMMAND_LINE_INSTALL:-}" ] || return 1
+  [ -n "$CONSOLE_ID" ] && [ "$CONSOLE_ID" != "0" ] || return 1
+  if [ -f "$DATA/auth.json" ]; then
+    [ "$(ask_keep)" = "Choose a new one" ] || { echo "Kept the current password"; return 0; }
+  fi
+  MSG="Choose a password for Photon. You sign in with it from this Mac and from your phone or other devices. Use at least 10 characters; a few words together make a strong one."
+  n=0
+  while [ $n -lt 5 ]; do
+    n=$((n + 1))
+    PW1=$(ask_hidden "$MSG") || return 1
+    PW2=$(ask_hidden "Type the same password again.") || { PW1=; return 1; }
+    if [ "$PW1" != "$PW2" ]; then
+      MSG="The two passwords were different. Choose a password for Photon:"
+      continue
+    fi
+    if OUT=$(printf '%s' "$PW1" | CONFIG_PATH="$DATA/config.json" "$NODE" "$ROOT/app/src/password.js" set 2>&1); then
+      PW1=; PW2=
+      echo "Password set"
+      return 0
+    fi
+    MSG="$OUT Choose a password for Photon:"
+  done
+  PW1=; PW2=
+  return 1
+}
+if choose_password; then :; elif [ -f "$DATA/auth.json" ]; then echo "Kept the current password"; else echo "No password chosen yet; Photon asks for one in the browser"; fi
+# The password tool runs as root, so hand its files to the service account too.
+chown -R "$SVC:$SVC" "$DATA"
 
 PORT=$(cat "$ROOT/port" 2>/dev/null | tr -dc '0-9')
 [ -n "$PORT" ] || PORT=8787
@@ -62,6 +145,9 @@ cat > "$PLIST" <<PL
 <plist version="1.0">
 <dict>
   <key>Label</key><string>com.photon.server</string>
+  <key>UserName</key><string>$SVC</string>
+  <key>GroupName</key><string>$SVC</string>
+  <key>Umask</key><integer>63</integer>
   <key>ProgramArguments</key>
   <array><string>$NODE</string><string>$ROOT/app/src/server.js</string></array>
   <key>WorkingDirectory</key><string>$ROOT/app</string>
@@ -71,6 +157,7 @@ cat > "$PLIST" <<PL
     <key>CONFIG_PATH</key><string>$DATA/config.json</string>
     <key>PHOTON_SERVICE</key><string>1</string>
     <key>NODE_ENV</key><string>production</string>
+    <key>HOME</key><string>$DATA</string>
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -117,10 +204,19 @@ if [ $OK -ne 1 ]; then
 fi
 echo "Photon is running on port $PORT"
 
-# Open Photon for whoever is at the screen.
-USER_ID=$(stat -f %u /dev/console 2>/dev/null)
-USER_NAME=$(stat -f %Su /dev/console 2>/dev/null)
-if [ -n "$USER_ID" ] && [ "$USER_ID" != "0" ]; then
-  launchctl asuser "$USER_ID" sudo -u "$USER_NAME" open "http://localhost:$PORT/" 2>/dev/null &
+# Open Photon for whoever is at the screen. With no password yet, the link carries the
+# one-time setup code, so the person who installed Photon is the one who picks it.
+URL="http://localhost:$PORT/"
+if [ ! -f "$DATA/auth.json" ]; then
+  i=0
+  while [ $i -lt 10 ] && [ ! -s "$DATA/setup-code" ]; do sleep 0.5; i=$((i + 1)); done
+  CODE=$(tr -dc 'A-Z0-9-' < "$DATA/setup-code" 2>/dev/null)
+  if [ -n "$CODE" ]; then
+    URL="$URL#setup=$CODE"
+    echo "Photon has no password yet. Its setup code is in $DATA/setup-code (sudo cat it)"
+  fi
+fi
+if [ -n "$CONSOLE_ID" ] && [ "$CONSOLE_ID" != "0" ] && [ -z "${COMMAND_LINE_INSTALL:-}" ]; then
+  launchctl asuser "$CONSOLE_ID" sudo -u "$CONSOLE_USER" open "$URL" 2>/dev/null &
 fi
 exit 0

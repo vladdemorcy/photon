@@ -3,7 +3,7 @@
 # crash, stops and starts again. Used by .github/workflows/android.yml; works the same against
 # any emulator or phone that adb can see (a phone needs "adb root" for the crash test).
 #
-#   bash android/test/emulator-test.sh dist/Photon-1.4.4.apk [results-dir]
+#   bash android/test/emulator-test.sh dist/Photon-<version>.apk [results-dir]
 set -uo pipefail
 APK="$1"
 OUT="${2:-android-test-results}"
@@ -69,11 +69,22 @@ code="$(curl -s -o "$OUT/index.html" -w '%{http_code}' -m 5 http://127.0.0.1:878
 [ "$code" = 200 ] && pass "web page loads" || fail "web page returned $code"
 code="$(curl -s -o /dev/null -w '%{http_code}' -m 5 http://127.0.0.1:8787/app.js)"
 [ "$code" = 200 ] && pass "app.js loads" || fail "app.js returned $code"
-# Settings save and read back
-if python3 "$(dirname "$0")/save-room.py" http://127.0.0.1:8787 > "$OUT/config-save.txt" 2>&1; then
-  pass "settings save"
+# A new Photon has no password: it shows a setup code, kept where only the app can read it.
+PASSWORD="emulator test lights on"
+SETUP_CODE="$(adb shell cat /data/data/$PKG/files/data/setup-code 2>/dev/null | tr -dc 'A-Z0-9-')"
+[ -n "$SETUP_CODE" ] && pass "setup code made" || fail "no setup code"
+code="$(curl -s -o /dev/null -w '%{http_code}' -m 5 http://127.0.0.1:8787/api/config)"
+[ "$code" = 401 ] && pass "settings need signing in" || fail "settings answered $code without signing in"
+# The in-app web view: with no password yet, the app hands the page its setup code.
+tap "Open Photon" && sleep 12 && shot 2-web-view-setup
+adb shell uiautomator dump /sdcard/web.xml >/dev/null 2>&1; adb shell cat /sdcard/web.xml > "$OUT/web-view.xml"
+grep -q "$SETUP_CODE" "$OUT/web-view.xml" && pass "the app filled in the setup code" || echo "NOTE: setup code not visible in the accessibility dump (see 2-web-view-setup.png)"
+adb shell input keyevent KEYCODE_BACK; sleep 2
+# Choose the password with the code, sign in with a cookie, then save and read back settings.
+if python3 "$(dirname "$0")/save-room.py" http://127.0.0.1:8787 "$PASSWORD" "$SETUP_CODE" > "$OUT/config-save.txt" 2>&1; then
+  pass "password set, signed in, settings save"
 else
-  fail "settings didn't save: $(head -c 300 "$OUT/config-save.txt")"
+  fail "sign in or save failed: $(tail -c 400 "$OUT/config-save.txt")"
 fi
 if adb shell dumpsys notification --noredact 2>/dev/null | grep -A3 "pkg=$PKG" > "$OUT/notification.txt" && [ -s "$OUT/notification.txt" ]; then
   pass "notification shown"
@@ -83,11 +94,8 @@ fi
 adb shell dumpsys activity services $PKG > "$OUT/service.txt" 2>&1
 grep -q "isForeground=true" "$OUT/service.txt" && pass "running as a foreground service" || fail "not a foreground service"
 
-# 3. The in-app web view
-tap "Open Photon" && sleep 12 && shot 2-web-view
-adb shell input keyevent KEYCODE_BACK; sleep 2
 
-# 4. Android brings Photon back after a crash
+# 3. Android brings Photon back after a crash
 pid="$(adb shell pidof $PKG:node | tr -d '\r')"
 if [ -n "$pid" ]; then
   adb shell kill -9 "$pid"
@@ -96,9 +104,14 @@ if [ -n "$pid" ]; then
 else
   fail "couldn't find Photon's process"
 fi
-curl -sf -m 5 http://127.0.0.1:8787/api/config | grep -q 'Emulator room' && pass "settings kept after the crash" || fail "settings lost after the crash"
+# Signing in again checks that the password and the settings both survived.
+if python3 "$(dirname "$0")/save-room.py" http://127.0.0.1:8787 "$PASSWORD" > "$OUT/after-crash.txt" 2>&1 && grep -q 'login: 200' "$OUT/after-crash.txt" && grep -q 'room already saved: True' "$OUT/after-crash.txt"; then
+  pass "password and settings kept after the crash"
+else
+  fail "after the crash: $(tail -c 400 "$OUT/after-crash.txt")"
+fi
 
-# 5. Stop and start from the app
+# 4. Stop and start from the app
 adb shell am start -W -n $PKG/.MainActivity > /dev/null; sleep 3
 tap "Stop Photon" && if wait_down 20; then pass "Stop works"; else fail "still answering after Stop"; fi
 sleep 2; shot 3-stopped

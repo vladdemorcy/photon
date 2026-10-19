@@ -11,4 +11,7 @@ pkgutil --forget com.photon.server.pkg >/dev/null 2>&1
 if [ "${1:-}" = "--all" ]; then
   rm -rf "/Library/Application Support/Photon"
 fi
+# The hidden account the service ran as. Kept settings get handed to a new one on reinstall.
+dscl . -delete /Users/_photon >/dev/null 2>&1
+dscl . -delete /Groups/_photon >/dev/null 2>&1
 exit 0

@@ -54,12 +54,27 @@ const round1 = v => Math.round(v * 10) / 10;
 const pctX = (x, L) => `${(x / L.width) * 100}%`;
 const pctY = (y, L) => `${(y / L.depth) * 100}%`;
 
+// Changes carry the session's CSRF token, which only this page has (see src/auth.js).
+function apiHeaders(method, hasBody) {
+  const h = hasBody ? { 'Content-Type': 'application/json' } : {};
+  if (method !== 'GET' && S.csrf) h['X-Photon-CSRF'] = S.csrf;
+  return h;
+}
+
 async function api(method, path, body) {
-  const res = await fetch(path, { method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const res = await fetch(path, { method, headers: apiHeaders(method, Boolean(body)), body: body ? JSON.stringify(body) : undefined, credentials: 'same-origin' });
   const data = await res.json().catch(() => ({}));
+  if (res.status === 401 && data.signIn) {
+    // Signed out on this device (expired, or signed out everywhere from another one).
+    showAuth(data.setup ? 'setup' : 'login', { expired: true });
+    throw new Error(data.error || 'Sign in to Photon first.');
+  }
   if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
   return data;
 }
+
+// A saved key or token: Photon keeps it on the server and only says that it's there.
+const SAVED = '__photon_saved__';
 
 let toastTimer;
 function toast(msg, isErr = false) {
@@ -223,7 +238,8 @@ function setSaveState(text, err = false) {
 
 async function saveNow() {
   const body = JSON.stringify(S.config);
-  const res = await fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
+  const res = await fetch('/api/config', { method: 'PUT', headers: apiHeaders('PUT', true), body, credentials: 'same-origin' });
+  if (res.status === 401) { showAuth('login', { expired: true }); throw new Error('signed out'); }
   const data = await res.json().catch(() => ({}));
   return { res, data };
 }
@@ -274,7 +290,7 @@ function flushOnLeave() {
   clearTimeout(saveTimer);
   saveTimer = null;
   try {
-    fetch('/api/config', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(S.config), keepalive: true });
+    fetch('/api/config', { method: 'PUT', headers: apiHeaders('PUT', true), body: JSON.stringify(S.config), keepalive: true, credentials: 'same-origin' });
   } catch { /* nothing more we can do here */ }
 }
 window.addEventListener('pagehide', flushOnLeave);
@@ -321,6 +337,7 @@ async function loadPlex() {
 // ---------------------------------------------------------------------------
 // routing
 function route() {
+  if (!S.config) return; // signed out: the sign-in screen is showing
   const [view, id] = location.hash.replace(/^#/, '').split('/');
   S.view = ['rooms', 'connections', 'activity'].includes(view) ? view : 'rooms';
   if (S.view === 'rooms') {
@@ -371,7 +388,7 @@ function welcomeHtml() {
       ${done ? '' : `<a class="btn ${btn ? 'primary' : ''}" href="${href}">${btn || 'Open'}</a>`}</li>`;
   return `
   <section class="panel welcome">
-    <img src="photon-logo.jpg" alt="Photon" width="1100" height="419">
+    <img src="photon-hero.png" alt="Photon" width="1100" height="314">
     <div>
       <h1>Lights that follow the movie</h1>
       <p class="muted">Photon dims, brightens and colors the lights in each room when something plays, pauses or stops on your media server. You choose what happens and when.</p>
@@ -1686,6 +1703,8 @@ function fieldHtml(kind, sysId, f, val) {
   if (f.type === 'checkbox') return `<label class="switch"><input type="checkbox" ${data} ${val !== false && val !== '' ? 'checked' : ''}><i></i>${esc(f.label)}</label>`;
   if (f.type === 'select') return `<label class="field"><span>${esc(f.label)}</span><select ${data}>${(f.options || []).map(o => `<option value="${esc(o.value)}" ${String(val ?? f.default ?? '') === o.value ? 'selected' : ''}>${esc(o.label)}</option>`).join('')}</select></label>`;
   const type = f.secret ? 'password' : f.type === 'number' ? 'number' : 'text';
+  // Saved keys never come to the page. Leave the box alone to keep it, or type a new one.
+  if (val === SAVED) return `<label class="field"><span>${esc(f.label)}</span><input type="${type}" ${data} value="" placeholder="Saved. Type a new one to replace it." autocomplete="off" spellcheck="false"></label>`;
   return `<label class="field"><span>${esc(f.label)}</span><input type="${type}" ${data} value="${esc(val ?? '')}" placeholder="${esc(f.placeholder || '')}" autocomplete="off" spellcheck="false"></label>`;
 }
 
@@ -1788,7 +1807,7 @@ function renderConnections() {
   const mediaOn = on(S.meta.media.filter(x => x.group !== 'tv').map(x => ({ kind: 'media', id: x.id })));
   const tvsOn = on(S.meta.media.filter(x => x.group === 'tv').map(x => ({ kind: 'media', id: x.id })));
   const jump = [['conn-lights', 'Lights', lightsOn], ['conn-media', 'Media server', mediaOn], ['conn-tvs', 'Smart TVs', tvsOn],
-    ['conn-location', 'Location'], ['tlsBox', 'HTTPS'], ['backupBox', 'Saved versions'], ['conn-webhook', 'Webhook key']];
+    ['conn-account', 'Password'], ['conn-location', 'Location'], ['tlsBox', 'HTTPS'], ['backupBox', 'Saved versions'], ['conn-webhook', 'Webhook key']];
   app.innerHTML = `<nav class="jump" aria-label="Jump to">
     ${jump.map(([id, label, n]) => `<button data-jump="${id}">${label}${n ? `<span class="count">${n} on</span>` : ''}</button>`).join('')}
   </nav>
@@ -1804,6 +1823,20 @@ function renderConnections() {
     <section id="conn-tvs">
       <header><h1>Smart TVs</h1><p>Lights can also follow whatever is playing on a TV or streaming box, from any app: Netflix, YouTube, Disney+ and the rest. Turn on the kinds you have, then pick the TV as a room's player.</p></header>
       ${S.meta.media.filter(s => s.group === 'tv').map(s => sysHtml('media', s)).join('')}
+    </section>
+    <section class="panel block" id="conn-account">
+      <h2>Password and sign-in</h2>
+      <p class="muted small">Photon asks for this password on each device you open it on. A device stays signed in for 30 days of use, until you sign it out.</p>
+      <form id="pwForm" class="pw-form">
+        <input type="text" autocomplete="username" value="Photon" class="sr-only" tabindex="-1" aria-hidden="true" readonly>
+        <label class="field"><span>Current password</span><input type="password" id="pwCurrent" autocomplete="current-password" required></label>
+        <label class="field"><span>New password</span><input type="password" id="pwNew" autocomplete="new-password" required></label>
+        <label class="field"><span>Type the new one again</span><input type="password" id="pwAgain" autocomplete="new-password" required></label>
+        <div class="actions-row"><button class="btn sm" type="submit">Change password</button></div>
+        <p class="muted small">Changing it signs out every other device.</p>
+      </form>
+      <div class="actions-row"><button class="btn sm" data-act="sign-out">Sign out of this device</button>
+        <button class="btn sm danger" data-act="sign-out-all">Sign out everywhere</button></div>
     </section>
     <section class="panel block" id="conn-location">
       <h2>Your location</h2>
@@ -1823,6 +1856,11 @@ function renderConnections() {
         <button class="btn sm" data-act="import-file">Import settings from another Photon…</button>
         <input type="file" id="importFile" accept=".json,application/json" hidden></div>
       <p class="muted small">Moving from a copy you ran by hand? Pick the <b>config.json</b> in its <b>data</b> folder. Rooms, layouts, behaviors, Plex sign-in and light keys all come across.</p>
+      <form class="export-row" id="exportForm" autocomplete="off">
+        <label class="field"><span>Moving Photon to another computer or phone? Download everything, keys included. Keep the file somewhere safe.</span>
+          <input type="password" id="exportPw" placeholder="Your Photon password" autocomplete="current-password" required></label>
+        <button class="btn sm" type="submit">Download settings</button>
+      </form>
     </section>
     <section class="panel block" id="conn-webhook">
       <h2>Webhook security</h2>
@@ -1835,6 +1873,7 @@ function renderConnections() {
     const el = b && document.getElementById(b.dataset.jump);
     if (el) window.scrollTo({ top: window.scrollY + el.getBoundingClientRect().top - 112, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   });
+  bindAccount();
   bindConnections();
   refreshTvStatus();
   bindTls();
@@ -1890,6 +1929,24 @@ async function loadBackups() {
       } catch (err) { toast(err.message, true); }
     };
   }
+  const exp = $('#exportForm');
+  if (exp) exp.onsubmit = async e => {
+    e.preventDefault();
+    const btn = $('button', exp);
+    btn.disabled = true;
+    try {
+      const res = await fetch('/api/backups/export', { method: 'POST', headers: apiHeaders('POST', true), body: JSON.stringify({ password: $('#exportPw').value }), credentials: 'same-origin' });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `${res.status} ${res.statusText}`);
+      const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || 'photon-settings.json';
+      const url = URL.createObjectURL(await res.blob());
+      const a = Object.assign(document.createElement('a'), { href: url, download: name });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      exp.reset();
+      toast('Downloaded. The file has your keys in it, so keep it private.');
+    } catch (err) { toast(err.message, true); }
+    btn.disabled = false;
+  };
   const now = $('[data-act="backup-now"]');
   if (now) now.onclick = async () => { try { await api('POST', '/api/backups/now'); toast('Saved a copy'); loadBackups(); } catch (err) { toast(err.message, true); } };
 }
@@ -2155,7 +2212,12 @@ function bindConnections() {
         await saving;
         const path = sa ? `/api/${kind}/${id}/action/${sa.dataset.sysAction}` : `/api/${kind}/${id}/test`;
         const res = await api('POST', path, { config: S.config[kind][id] });
-        if (res.patch) { Object.assign(S.config[kind][id], res.patch); commit(0); }
+        if (res.patch) {
+          // The server saved the new keys itself and only says they're saved.
+          Object.assign(S.config[kind][id], res.patch);
+          if (res.editRev) S.config.editRev = res.editRev;
+          commit(0);
+        }
         S.results[id] = { ok: true, msg: res.message };
         S.targetsLoaded = false; S.playersLoaded = false;
       } catch (err) {
@@ -2183,6 +2245,96 @@ function bindConnections() {
   $('#lat').addEventListener('change', locInput);
   $('#lon').addEventListener('change', locInput);
 }
+function bindAccount() {
+  $('#pwForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const cur = $('#pwCurrent').value, next = $('#pwNew').value, again = $('#pwAgain').value;
+    if (next !== again) { toast('The two new passwords are different.', true); return; }
+    const btn = $('#pwForm button[type=submit]');
+    btn.disabled = true;
+    try {
+      await api('POST', '/api/auth/password', { current: cur, password: next });
+      S.csrf = (await api('GET', '/api/auth/state')).csrf; // a new session for this device
+      $('#pwForm').reset();
+      toast('Password changed. Every other device has to sign in again.');
+    } catch (err) { toast(err.message, true); }
+    btn.disabled = false;
+  });
+  $('#conn-account')?.addEventListener('click', async e => {
+    const act = e.target.closest('[data-act="sign-out"], [data-act="sign-out-all"]')?.dataset.act;
+    if (!act) return;
+    if (act === 'sign-out-all' && !confirm('Sign out every device, including this one?')) return;
+    try { await api('POST', act === 'sign-out' ? '/api/auth/logout' : '/api/auth/logout-all'); } catch { /* signed out either way */ }
+    location.reload();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// SIGN IN
+function showAuth(mode, { code = '', expired = false, minLength = 10 } = {}) {
+  if (document.body.classList.contains('signed-out') && $('#authForm')?.dataset.mode === mode) return;
+  S.config = null;
+  if (view3d) { view3d.dispose(); view3d = null; }
+  document.body.classList.add('signed-out');
+  document.body.classList.remove('sheet-open', 'pop-open');
+  $('#pageTitle').textContent = mode === 'setup' ? 'Welcome' : 'Sign in';
+  setSaveState('');
+  const hidden = '<input type="text" name="username" autocomplete="username" value="Photon" class="sr-only" tabindex="-1" aria-hidden="true" readonly>';
+  app.innerHTML = `<section class="panel auth" aria-labelledby="authTitle">
+    <img src="photon-hero.png" alt="Photon" width="1100" height="314">
+    ${mode === 'setup' ? `
+      <h1 id="authTitle">Choose a password for Photon</h1>
+      <p class="muted">Photon keeps the keys to your lights, TVs and media server, so it needs a password. You'll use it to open Photon on any device.</p>
+      <form id="authForm" data-mode="setup" novalidate>
+        <label class="field"><span>Setup code</span><input id="setupCode" value="${esc(code)}" autocomplete="one-time-code" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" required></label>
+        <p class="muted small">It's shown where Photon was installed or started, and kept in the file called setup-code in Photon's settings folder.</p>
+        ${hidden}
+        <label class="field"><span>New password</span><input type="password" id="pw1" autocomplete="new-password" required></label>
+        <label class="field"><span>Type it again</span><input type="password" id="pw2" autocomplete="new-password" required></label>
+        <p class="muted small">At least ${minLength} characters. A few unrelated words together make a password that's strong and easy to remember.</p>
+        <label class="switch"><input type="checkbox" id="showPw"><i></i>Show password</label>
+        <p class="result err" id="authErr" role="alert"></p>
+        <button class="btn primary" type="submit">Save password and open Photon</button>
+      </form>` : `
+      <h1 id="authTitle">Sign in to Photon</h1>
+      <p class="muted">${expired ? 'You were signed out on this device. Sign in again to carry on.' : 'Type the password chosen when Photon was installed.'}</p>
+      <form id="authForm" data-mode="login" novalidate>
+        ${hidden}
+        <label class="field"><span>Password</span><input type="password" id="pw1" autocomplete="current-password" required></label>
+        <label class="switch"><input type="checkbox" id="showPw"><i></i>Show password</label>
+        <p class="result err" id="authErr" role="alert"></p>
+        <button class="btn primary" type="submit">Sign in</button>
+        <p class="muted small">Forgot it? On the computer Photon runs on, run Photon's installer again and choose a new password, or see "Forgot the password" in the troubleshooting guide.</p>
+      </form>`}
+  </section>`;
+  const form = $('#authForm');
+  $('#showPw').addEventListener('change', e => $$('input[type=password], input[data-pw]', form).forEach(i => { i.type = e.target.checked ? 'text' : 'password'; i.dataset.pw = '1'; }));
+  (mode === 'setup' && !code ? $('#setupCode') : $('#pw1')).focus();
+  form.addEventListener('submit', async e => {
+    e.preventDefault();
+    const err = $('#authErr');
+    err.textContent = '';
+    const pw = $('#pw1').value;
+    if (mode === 'setup' && pw !== $('#pw2').value) { err.textContent = 'The two passwords are different.'; return; }
+    if (!pw) { err.textContent = 'Type the password.'; return; }
+    const btn = $('button[type=submit]', form);
+    btn.disabled = true;
+    try {
+      const res = await fetch(mode === 'setup' ? '/api/auth/setup' : '/api/auth/login', {
+        method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(mode === 'setup' ? { code: $('#setupCode').value, password: pw } : { password: pw }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+      location.reload();
+    } catch (e2) {
+      err.textContent = e2.message;
+      btn.disabled = false;
+      $('#pw1').select();
+    }
+  });
+}
+
 function randomColorHex() { return `#${randomRgb().map(v => v.toString(16).padStart(2, '0')).join('')}`; }
 const round4 = v => Math.round(v * 1e4) / 1e4;
 
@@ -2254,6 +2406,23 @@ async function pollStatus() {
 
 // ---------------------------------------------------------------------------
 async function boot() {
+  let st;
+  try {
+    const r = await fetch('/api/auth/state', { credentials: 'same-origin' });
+    st = await r.json();
+  } catch (err) {
+    app.innerHTML = `<div class="empty-state">Photon's server isn't answering (${esc(err.message)}). Check that it's running, then reload.</div>`;
+    return;
+  }
+  // The installers and the Android app can hand over the setup code in the address.
+  const m = /^#setup=([A-Za-z0-9-]+)/.exec(location.hash);
+  if (m) history.replaceState(null, '', `${location.pathname}#rooms`);
+  let fromApp = '';
+  try { fromApp = st.setup && window.PhotonAndroid?.setupCode ? String(window.PhotonAndroid.setupCode() || '') : ''; } catch { /* not the app */ }
+  if (st.setup) { showAuth('setup', { code: m?.[1] || fromApp, minLength: st.minLength }); return; }
+  if (!st.signedIn) { showAuth('login', { minLength: st.minLength }); return; }
+  S.csrf = st.csrf;
+  document.body.classList.remove('signed-out');
   try {
     [S.meta, S.config, S.status, S.preview] = await Promise.all([api('GET', '/api/meta'), api('GET', '/api/config'), api('GET', '/api/status'), api('GET', '/api/preview')]);
   } catch (err) {

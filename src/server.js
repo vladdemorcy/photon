@@ -15,10 +15,13 @@ const media = require('./media');
 const schedule = require('./schedule');
 const trackerLib = require('./media/tracker');
 const tlsLib = require('./tls');
+const authLib = require('./auth');
+const secretsLib = require('./secrets');
 
 const VERSION = require('../package.json').version;
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '0.0.0.0';
+// Older setups set a password with UI_PASSWORD. It now becomes the sign-in password once.
 const UI_PASSWORD = process.env.UI_PASSWORD || '';
 
 // ---- Logging that can't take Photon down ----------------------------------------
@@ -44,6 +47,17 @@ for (const name of ['log', 'error', 'warn']) {
 }
 
 cfg.load();
+
+// Older setups used UI_PASSWORD for a browser password prompt. Use it as the first sign-in
+// password, once, so those setups keep working.
+if (UI_PASSWORD) {
+  const a = require('./auth').create(path.dirname(cfg.CONFIG_PATH));
+  if (!a.hasPassword()) {
+    const problem = a.checkPolicy(UI_PASSWORD);
+    if (problem) console.error(`UI_PASSWORD wasn't used as Photon's password: ${problem} Choose one when you open Photon.`);
+    else a.setPassword(UI_PASSWORD).then(() => console.log('Using UI_PASSWORD as Photon\'s sign-in password.')).catch(err => console.error(`UI_PASSWORD: ${err.message}`));
+  }
+}
 
 // ---- Crash notes -------------------------------------------------------------
 // If Photon ever crashes, write down why next to the settings, so the reason can be seen
@@ -95,10 +109,70 @@ function serviceLogTail(lines = 80) {
 
 const app = express();
 const tlsMgr = tlsLib.create(cfg.CONFIG_PATH);
+const auth = authLib.create(DATA_DIR);
+const secrets = secretsLib.create(lighting, media);
 let httpsServer = null;
 let httpsPortOpen = null;
 let httpsError = '';
 app.disable('x-powered-by');
+
+// ---- Only answer at Photon's own addresses ----------------------------------------------
+// A website can point a name it controls at this computer's address ("DNS rebinding") and then
+// talk to Photon as if it were that site. Requests have to be addressed to an IP address or to
+// one of this computer's own names, so that doesn't work.
+function allowedHostNames() {
+  const host = os.hostname().toLowerCase();
+  const short = host.split('.')[0];
+  return new Set(['localhost', host, short, `${short}.local`, `${host}.local`,
+    ...(cfg.get().tls?.extraNames || []).map(n => String(n).trim().toLowerCase()),
+    ...String(process.env.PHOTON_HOSTNAMES || '').split(',').map(n => n.trim().toLowerCase())].filter(Boolean));
+}
+function hostAllowed(hostHeader) {
+  const h = String(hostHeader || '').trim().toLowerCase();
+  if (!h) return false;
+  const name = h.startsWith('[') ? h.slice(1, h.indexOf(']')) : h.replace(/:\d+$/, '');
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(name) || name.includes(':')) return true; // an IP address
+  if (name === 'localhost' || name.endsWith('.localhost')) return true;
+  return allowedHostNames().has(name);
+}
+// What the page may load and run: only Photon's own files, plus the two small scripts inside
+// index.html (the theme and the module map), allowed by their exact hashes. Nothing from other
+// sites, no plugins, and no other site may show Photon inside a frame.
+const CSP = (() => {
+  let hashes = [];
+  try {
+    const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+    hashes = [...html.matchAll(/<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/g)]
+      .map(m => `'sha256-${crypto.createHash('sha256').update(m[1]).digest('base64')}'`);
+  } catch { /* no page to protect */ }
+  return [
+    "default-src 'self'", `script-src 'self' ${hashes.join(' ')}`.trim(), "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:", "font-src 'self'", "connect-src 'self'", "worker-src 'self' blob:",
+    "object-src 'none'", "base-uri 'self'", "form-action 'self'", "frame-ancestors 'none'",
+  ].join('; ');
+})();
+
+app.use((req, res, next) => {
+  // Basic protections for every page and answer.
+  res.set({
+    'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Content-Security-Policy': CSP,
+    'Referrer-Policy': 'no-referrer',
+    'Cross-Origin-Opener-Policy': 'same-origin',
+    'Permissions-Policy': 'camera=(), microphone=(), payment=(), usb=()',
+  });
+  if (hostAllowed(req.headers.host)) return next();
+  res.status(421).type('text/plain').send(`Photon only answers at this computer's own addresses, and "${String(req.headers.host || '').slice(0, 100)}" isn't one of them. Use its IP address, or add this name under Connections > Secure connection (HTTPS) > Other names.`);
+});
+
+// A request that came from this page itself, not from another website.
+function sameOrigin(req) {
+  if (req.headers['sec-fetch-site'] === 'cross-site') return false;
+  const origin = req.headers.origin;
+  if (!origin) return true; // not sent by a browser page; the session and CSRF checks still apply
+  try { return new URL(origin).host.toLowerCase() === String(req.headers.host || '').toLowerCase(); } catch { return false; }
+}
 
 const tracker = trackerLib.create(ev => engine.handle(ev).catch(err => engine.addLog('error', `Event handling failed: ${err.message}`)));
 
@@ -164,17 +238,23 @@ async function ensurePlexWebhook(force = false) {
 setInterval(() => schedulePlexWebhook(), 30 * 60e3).unref(); // also catches a new IP address
 
 // ---- Webhooks from media servers ------------------------------------------
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+// Plex sends a small thumbnail with some events. Nothing is read until the key in the address
+// is checked, and then only a couple of small files.
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 4 * 1024 * 1024, files: 2, fields: 20, parts: 30, fieldSize: 2 * 1024 * 1024 } });
+function webhookKey(req, res, next) {
+  const a = Buffer.from(String(req.params.token));
+  const b = Buffer.from(cfg.get().webhookToken);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(403).send('bad token');
+  next();
+}
 
 app.post('/webhook/:source/:token',
+  webhookKey,
   upload.any(),
   express.json({ limit: '2mb', type: ['application/json', 'text/plain', 'application/*+json'] }),
   express.urlencoded({ extended: false, limit: '2mb' }),
   (req, res) => {
     const c = cfg.get();
-    const a = Buffer.from(String(req.params.token));
-    const b = Buffer.from(c.webhookToken);
-    if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return res.status(403).send('bad token');
     const src = media.byId[req.params.source];
     if (!src || !src.parseWebhook) return res.status(404).send('unknown source');
     if (!c.media[src.id]?.enabled) {
@@ -252,17 +332,6 @@ setInterval(() => {
   try { if (tlsMgr.ensureGenerated(t.extraNames).renewed) { applyTls(); engine.addLog('ok', 'Renewed Photon\'s HTTPS certificate'); } } catch (err) { engine.addLog('error', `Certificate renewal failed: ${err.message}`); }
 }, 6 * 3600 * 1000).unref();
 
-// ---- Optional password for the UI and API ---------------------------------
-if (UI_PASSWORD) {
-  app.use((req, res, next) => {
-    const [, b64] = (req.headers.authorization || '').split(' ');
-    const pass = Buffer.from(b64 || '', 'base64').toString().split(':').slice(1).join(':');
-    const ok = pass.length === UI_PASSWORD.length && crypto.timingSafeEqual(Buffer.from(pass), Buffer.from(UI_PASSWORD));
-    if (ok) return next();
-    res.set('WWW-Authenticate', 'Basic realm="Photon"').status(401).send('Authentication required');
-  });
-}
-
 app.use(express.json({ limit: '2mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
 // three.js is served to the browser for the 3D view. Look in node_modules directly so a
@@ -273,7 +342,120 @@ const threeDir = [path.join(__dirname, '..', 'node_modules', 'three')]
 app.use('/vendor/three', express.static(path.join(threeDir, 'build')));
 app.use('/vendor/three-addons', express.static(path.join(threeDir, 'examples', 'jsm')));
 
-const wrap = fn => (req, res) => Promise.resolve(fn(req, res)).catch(err => res.status(400).json({ error: err.message }));
+const wrap = fn => (req, res) => Promise.resolve(fn(req, res)).catch(err => res.status(err.status || 400).json({ error: err.message }));
+
+// ---- Signing in ---------------------------------------------------------------------------
+// Open to everyone: whether a password exists and whether this browser is signed in. The page
+// uses it to show the sign-in or first-time screen.
+app.get('/api/auth/state', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const s = auth.sessionFor(req);
+  res.json({ setup: !auth.hasPassword(), signedIn: Boolean(s), csrf: s?.csrf || null, minLength: auth.MIN_LENGTH });
+});
+
+// Photon's version, for the installers and the Android app to see that it's up.
+app.get('/api/version', (req, res) => res.json({ version: VERSION }));
+
+// Enough for a newer Photon to recognize this one on its port during an update.
+app.get('/api/instance', (req, res) => res.json({
+  photon: true, pid: process.pid, service: Boolean(process.env.PHOTON_SERVICE),
+  configId: crypto.createHash('sha256').update(path.resolve(cfg.CONFIG_PATH).toLowerCase()).digest('hex').slice(0, 16),
+}));
+
+function refuseUnlessSameOrigin(req, res) {
+  if (sameOrigin(req)) return false;
+  res.status(403).json({ error: 'Photon only accepts this from its own page.' });
+  return true;
+}
+const clientIp = req => String(req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+function tooMany(req, res) {
+  const wait = auth.limited(clientIp(req));
+  if (!wait) return false;
+  res.set('Retry-After', String(wait)).status(429).json({ error: `Too many wrong tries. Wait ${Math.ceil(wait / 60)} minute${wait > 60 ? 's' : ''} and try again.` });
+  return true;
+}
+const slowDown = () => new Promise(r => setTimeout(r, 400 + Math.random() * 400));
+
+app.post('/api/auth/login', wrap(async (req, res) => {
+  if (refuseUnlessSameOrigin(req, res) || tooMany(req, res)) return;
+  if (!auth.hasPassword()) return res.status(409).json({ error: 'Photon has no password yet.', setup: true });
+  const ok = await auth.verifyPassword(String(req.body?.password ?? ''));
+  if (!ok) {
+    auth.noteFailure(clientIp(req));
+    engine.addLog('warn', `Wrong Photon password from ${clientIp(req)}`);
+    await slowDown();
+    return res.status(401).json({ error: 'That password isn\'t right.' });
+  }
+  auth.noteSuccess(clientIp(req));
+  const id = auth.startSession(req);
+  auth.setCookie(res, req, id);
+  engine.addLog('info', `Signed in to Photon from ${clientIp(req)}`);
+  res.json({ ok: true });
+}));
+
+// The first password. Needs the setup code, so only someone who can see Photon's console,
+// settings folder or installer can choose it.
+app.post('/api/auth/setup', wrap(async (req, res) => {
+  if (refuseUnlessSameOrigin(req, res) || tooMany(req, res)) return;
+  if (auth.hasPassword()) return res.status(409).json({ error: 'Photon already has a password. Sign in instead.' });
+  if (!auth.codeMatches(req.body?.code)) {
+    auth.noteFailure(clientIp(req));
+    await slowDown();
+    return res.status(401).json({ error: 'That setup code isn\'t right. It\'s shown where Photon was installed or started.' });
+  }
+  await auth.setPassword(String(req.body?.password ?? ''));
+  auth.noteSuccess(clientIp(req));
+  auth.endAllSessions();
+  const id = auth.startSession(req);
+  auth.setCookie(res, req, id);
+  engine.addLog('ok', `Photon's password was set from ${clientIp(req)}`);
+  res.json({ ok: true });
+}));
+
+app.post('/api/auth/logout', (req, res) => {
+  if (refuseUnlessSameOrigin(req, res)) return;
+  auth.endSession(req);
+  auth.clearCookie(res, req);
+  res.json({ ok: true });
+});
+
+// Everything else under /api needs a signed-in session, and changes also need the session's
+// CSRF token, which only Photon's own page has.
+app.use('/api', (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  if (req.headers['sec-fetch-site'] === 'cross-site') return res.status(403).json({ error: 'Photon only accepts this from its own page.' });
+  const s = auth.sessionFor(req);
+  if (!s) return res.status(401).json({ error: 'Sign in to Photon first.', signIn: true, setup: !auth.hasPassword() });
+  if (!['GET', 'HEAD'].includes(req.method)) {
+    if (!sameOrigin(req)) return res.status(403).json({ error: 'Photon only accepts this from its own page.' });
+    if (!auth.csrfOk(req, s)) return res.status(403).json({ error: 'This page is out of date. Reload it and try again.' });
+  }
+  req.photonSession = s;
+  next();
+});
+
+app.post('/api/auth/password', wrap(async (req, res) => {
+  if (tooMany(req, res)) return;
+  if (!(await auth.verifyPassword(String(req.body?.current ?? '')))) {
+    auth.noteFailure(clientIp(req));
+    await slowDown();
+    return res.status(401).json({ error: 'Your current password isn\'t right.' });
+  }
+  await auth.setPassword(String(req.body?.password ?? ''));
+  auth.endAllSessions();
+  const id = auth.startSession(req); // a fresh session for this browser
+  auth.setCookie(res, req, id);
+  engine.addLog('ok', 'Photon\'s password was changed. Everyone else was signed out.');
+  res.json({ ok: true });
+}));
+
+app.post('/api/auth/logout-all', (req, res) => {
+  auth.endAllSessions();
+  auth.clearCookie(res, req);
+  engine.addLog('info', 'Everyone was signed out of Photon');
+  res.json({ ok: true });
+});
+
 const lanAddresses = () => Object.values(os.networkInterfaces()).flat().filter(i => i && i.family === 'IPv4' && !i.internal).map(i => i.address);
 
 app.get('/api/meta', (req, res) => {
@@ -295,16 +477,17 @@ app.get('/api/meta', (req, res) => {
   });
 });
 
-app.get('/api/config', (req, res) => res.json(cfg.get()));
+app.get('/api/config', (req, res) => res.json(secrets.redact(cfg.get())));
 
 app.get('/api/config/rev', (req, res) => res.json({ editRev: cfg.get().editRev }));
 
 app.put('/api/config', wrap(async (req, res) => {
-  const next = { ...req.body };
   const cur = cfg.get();
+  // Keys the page only knows as "saved" keep their saved values.
+  const next = secrets.restore({ ...req.body }, cur);
   // A page that loaded an older copy must not overwrite newer changes made elsewhere.
   if (next.editRev !== cur.editRev) {
-    return res.status(409).json({ error: 'Photon was changed in another window or on another device.', config: cur });
+    return res.status(409).json({ error: 'Photon was changed in another window or on another device.', config: secrets.redact(cur) });
   }
   // A time that can't be read doesn't block saving everything else; that behavior just
   // stays inactive until it's fixed.
@@ -338,10 +521,28 @@ app.post('/api/backups/restore', wrap(async (req, res) => {
 }));
 
 app.post('/api/backups/import', wrap(async (req, res) => {
-  const imported = cfg.importConfig(req.body?.config);
+  // A file saved from a page has keys hidden as SAVED; those keep the keys this Photon has.
+  const incoming = req.body?.config && typeof req.body.config === 'object' ? secrets.restore(req.body.config, cfg.get()) : req.body?.config;
+  const imported = cfg.importConfig(incoming);
   engine.addLog('ok', `Imported settings from another Photon (${imported.rooms.length} room(s))`);
   startIntegrations();
   res.json({ ok: true, rooms: imported.rooms.length });
+}));
+
+// Every setting including keys and tokens, as a file, for moving Photon to another computer
+// or phone. The file holds every key, so it takes the password again.
+app.post('/api/backups/export', wrap(async (req, res) => {
+  if (tooMany(req, res)) return;
+  if (!(await auth.verifyPassword(String(req.body?.password ?? '')))) {
+    auth.noteFailure(clientIp(req));
+    await slowDown();
+    return res.status(403).json({ error: 'That password isn\'t right.' });
+  }
+  auth.noteSuccess(clientIp(req));
+  engine.addLog('ok', `Settings, keys included, were downloaded from ${clientIp(req)}`);
+  res.set('Cache-Control', 'no-store');
+  res.set('Content-Disposition', `attachment; filename="photon-settings-${new Date().toISOString().slice(0, 10)}.json"`);
+  res.type('application/json').send(JSON.stringify(cfg.get(), null, 2));
 }));
 
 app.post('/api/backups/now', wrap(async (req, res) => {
@@ -354,11 +555,10 @@ app.post('/api/webhook-token/regenerate', (req, res) => {
   const c = cfg.get();
   const saved = cfg.set({ ...c, webhookToken: crypto.randomBytes(12).toString('hex') });
   schedulePlexWebhook(true);
-  res.json(saved);
+  res.json(secrets.redact(saved));
 });
 
 app.get('/api/default-rules', (req, res) => res.json(cfg.defaultRules()));
-app.get('/api/version', (req, res) => res.json({ version: VERSION }));
 app.get('/api/diagnostics', (req, res) => res.json({
   version: VERSION, node: process.version, platform: `${process.platform} ${os.release()}`,
   pid: process.pid, ppid: process.ppid, user: (() => { try { return os.userInfo().username; } catch { return process.env.USERNAME || ''; } })(),
@@ -377,16 +577,29 @@ app.get('/api/preview', (req, res) => {
 
 // ---- Lighting systems ------------------------------------------------------
 // The UI posts the (possibly unsaved) settings so you can test before saving.
+// Settings the page sent for testing, with saved keys filled back in.
+const bodyConfig = (req, kind, id) => {
+  const saved = cfg.get()[kind][id];
+  return req.body?.config ? secrets.restoreOne(kind, id, req.body.config, saved) : saved;
+};
+// Pairing gives back new keys. Save them here, and only tell the page that they're saved.
+function keepPatch(kind, id, result) {
+  if (!result?.patch) return result;
+  const c = cfg.get();
+  const saved = cfg.set({ ...c, [kind]: { ...c[kind], [id]: { ...c[kind][id], ...result.patch } }, editRev: c.editRev + 1 });
+  return { ...result, patch: secrets.redactOne(kind, id, result.patch), editRev: saved.editRev };
+}
+
 app.post('/api/lighting/:id/action/:action', wrap(async (req, res) => {
   const p = lighting.byId[req.params.id];
   if (!p?.action) throw new Error('unknown action');
-  res.json(await p.action(req.params.action, req.body?.config || cfg.get().lighting[p.id]));
+  res.json(keepPatch('lighting', p.id, await p.action(req.params.action, bodyConfig(req, 'lighting', p.id))));
 }));
 
 app.post('/api/lighting/:id/test', wrap(async (req, res) => {
   const p = lighting.byId[req.params.id];
   if (!p) throw new Error('unknown lighting system');
-  const c = req.body?.config || cfg.get().lighting[p.id];
+  const c = bodyConfig(req, 'lighting', p.id);
   if (!p.configured(c)) throw new Error('Fill in the settings first');
   const r = await p.list(c);
   if (!r.targets.length && ['govee', 'wiz'].includes(p.id)) {
@@ -414,7 +627,7 @@ app.get('/api/targets', wrap(async (req, res) => {
 app.post('/api/media/:id/action/:action', wrap(async (req, res) => {
   const s = media.byId[req.params.id];
   if (!s?.action) throw new Error('unknown action');
-  res.json(await s.action(req.params.action, req.body?.config || cfg.get().media[s.id]));
+  res.json(keepPatch('media', s.id, await s.action(req.params.action, bodyConfig(req, 'media', s.id))));
 }));
 
 app.get('/api/media/:id/status', (req, res) => {
@@ -425,7 +638,7 @@ app.get('/api/media/:id/status', (req, res) => {
 app.post('/api/media/:id/test', wrap(async (req, res) => {
   const s = media.byId[req.params.id];
   if (!s) throw new Error('unknown media server');
-  const c = req.body?.config || cfg.get().media[s.id];
+  const c = bodyConfig(req, 'media', s.id);
   const players = await s.listPlayers(c);
   if (s.group === 'tv') return res.json({ message: `Found ${players.map(p => p.name).join(', ')}. Add ${players.length > 1 ? 'them' : 'it'} to a room as its player.` });
   res.json({ message: players.length ? `Connected. Found ${players.length} player(s).` : 'Nothing to test without credentials. Webhooks still work; players appear here once they play something.' });
@@ -556,14 +769,14 @@ app.get('/api/plex/signin/:id', wrap(async (req, res) => {
   cfg.set({ ...c, media: { ...c.media, plex: pc } });
   engine.addLog('ok', `Signed in to Plex as ${pc.account}`);
   schedulePlexWebhook(true);
-  res.json({ done: true, config: cfg.get().media.plex, ...publicInfo(data) });
+  res.json({ done: true, config: secrets.redactOne('media', 'plex', cfg.get().media.plex), ...publicInfo(data) });
 }));
 
 app.post('/api/plex/signout', wrap(async (req, res) => {
   const c = cfg.get();
   const pc = { ...c.media.plex, token: '', account: '', serverId: '' };
   cfg.set({ ...c, media: { ...c.media, plex: pc } });
-  res.json({ config: cfg.get().media.plex });
+  res.json({ config: secrets.redactOne('media', 'plex', cfg.get().media.plex) });
 }));
 
 app.post('/api/plex/token', wrap(async (req, res) => {
@@ -576,7 +789,7 @@ app.post('/api/plex/token', wrap(async (req, res) => {
   if (!pc.serverId && data.servers.length === 1) pc.serverId = data.servers[0].id;
   cfg.set({ ...c, media: { ...c.media, plex: pc } });
   schedulePlexWebhook(true);
-  res.json({ config: cfg.get().media.plex, ...publicInfo(data) });
+  res.json({ config: secrets.redactOne('media', 'plex', cfg.get().media.plex), ...publicInfo(data) });
 }));
 
 const publicInfo = d => ({ account: d.account, servers: d.servers, homeUsers: d.homeUsers, webhook: plexHook });
@@ -631,10 +844,16 @@ const INSTANCE_FILE = path.join(DATA_DIR, 'instance.json');
 async function stopOtherPhoton() {
   // Only a process that answers as Photon on this port, using these same settings, is stopped.
   const pids = new Set();
+  const myConfigId = crypto.createHash('sha256').update(path.resolve(cfg.CONFIG_PATH).toLowerCase()).digest('hex').slice(0, 16);
+  const ask = async p => { const ctrl = new AbortController(); setTimeout(() => ctrl.abort(), 2000); return (await fetch(`http://127.0.0.1:${PORT}${p}`, { signal: ctrl.signal })).json(); };
   try {
-    const ctrl = new AbortController(); setTimeout(() => ctrl.abort(), 2000);
-    const d = await (await fetch(`http://127.0.0.1:${PORT}/api/diagnostics`, { signal: ctrl.signal })).json();
-    const same = path.resolve(String(d?.config || '')).toLowerCase() === path.resolve(cfg.CONFIG_PATH).toLowerCase();
+    // Photon 1.5 says who it is at /api/instance; older versions at /api/diagnostics.
+    let d = await ask('/api/instance').catch(() => null);
+    let same = d?.photon && d.configId === myConfigId;
+    if (!d?.photon) {
+      d = await ask('/api/diagnostics');
+      same = path.resolve(String(d?.config || '')).toLowerCase() === path.resolve(cfg.CONFIG_PATH).toLowerCase();
+    }
     // A copy started by hand never pushes the Windows service aside; the service does take over.
     if (d?.pid && same && !(d.service && !process.env.PHOTON_SERVICE)) pids.add(Number(d.pid));
   } catch { /* not Photon, or too old to say */ }
@@ -665,6 +884,10 @@ function onListening() {
   console.log(`Photon ${VERSION} is running: http://localhost:${PORT}`);
   for (const ip of lanAddresses()) console.log(`  on your network: http://${ip}:${PORT}`);
   console.log(`Config: ${cfg.CONFIG_PATH}`);
+  if (!auth.hasPassword()) {
+    console.log(`Photon has no password yet. Open it and choose one with this setup code: ${auth.setupCode()}`);
+    console.log(`  (the code is also in ${auth.SETUP_FILE})`);
+  }
   const last = recentCrashes(1)[0];
   if (last && Date.parse(last.slice(0, 24)) > STARTED - 10 * 60e3) {
     engine.addLog('error', `Photon restarted after a problem: ${last.split('\n')[1] || last.slice(0, 200)}`);

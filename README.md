@@ -10,16 +10,17 @@ Photon sets each room's lights to match what's playing. When a movie starts on t
 
 You can use more than one of each at the same time. A single room can mix Hue and Govee lights, for example, and respond to both Plex and Jellyfin players.
 
-**Version 1.4.** Adds Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 adds a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
+**Version 1.5.** Photon now has a proper sign-in: you choose a password when you install it, and each browser stays signed in with a secure cookie. See [Signing in and security](#signing-in-and-security). 1.4 added Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
 
 ## Install on Windows (easiest)
 
-Run **Photon-Setup-1.4.5.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
+Run **Photon-Setup-1.5.0.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
 
 - **Node.js:** checks for Node.js 18 or newer. If it's missing or too old, setup downloads the current LTS version from nodejs.org, checks it against nodejs.org's published SHA-256 checksums, and installs it to `C:\Program Files\nodejs`.
 - **Photon:** installs Photon to `C:\Program Files\Photon`. Everything it needs is included.
-- **Settings:** keeps your settings in `C:\ProgramData\Photon`, where only SYSTEM and Administrators can read them, since they hold your sign-in tokens. Updating or removing Photon leaves them there. If you ran Photon by hand before, point setup at that folder and it brings your rooms and settings over.
-- **Service:** runs Photon as the **Photon** Windows service, so it starts with the computer and restarts itself if it stops. Its logs are in `C:\ProgramData\Photon\logs`.
+- **Password:** asks you to choose the password you sign in to Photon with. When you update, you can keep the current one or choose a new one.
+- **Settings:** keeps your settings in `C:\ProgramData\Photon`, where only the Photon service and Administrators can read them, since they hold your sign-in tokens and the password hash. Updating or removing Photon leaves them there. If you ran Photon by hand before, point setup at that folder and it brings your rooms and settings over.
+- **Service:** runs Photon as the **Photon** Windows service, so it starts with the computer and restarts itself if it stops. The service runs under Windows' low-rights *Local Service* account with its own service identity, not as SYSTEM, and only uses a Node.js from Program Files. Its logs are in `C:\ProgramData\Photon\logs`.
 - **Firewall:** adds firewall rules for your home network only (the web page port, the HTTPS port and Govee's reply port).
 - **Shortcuts:** adds a Photon shortcut with the Photon logo to the Start menu and, unless you turn it off, the desktop. Both open Photon in your default browser. Photon also shows up in Settings > Apps, so you can remove it from there.
 
@@ -28,18 +29,23 @@ To update, run a newer Photon-Setup the same way. To remove Photon, use Settings
 **Running setup from a script.** Setup also runs without a window:
 
 ```
-Photon-Setup-1.4.5.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
+set PHOTON_PASSWORD=the password you want
+Photon-Setup-1.5.0.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
 "C:\Program Files\Photon\Uninstall Photon.exe" -Quiet [-DeleteData]
 ```
+
+The password goes in the `PHOTON_PASSWORD` environment variable rather than on the command line, where other programs could see it. Leave it out and an update keeps the current password, while a new install prints a link with a one-time setup code for choosing one.
 
 Windows SmartScreen may warn that the installer is from an unknown publisher, because it isn't code-signed. Choose *More info*, then *Run anyway*. If you have a code-signing certificate, sign `dist/Photon-Setup-*.exe` with `signtool` after building. To build the installer yourself, run `installer/build.sh` on Linux or macOS with Node.js and NSIS (`makensis`) installed.
 
 ## Install on a Mac
 
-Open **Photon-1.4.5.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
+Open **Photon-1.5.0.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
 
 - **Node.js:** downloads its own copy from nodejs.org the first time (checked against nodejs.org's checksums) and keeps it in `/Library/Photon/node`, so nothing else on your Mac changes.
 - **Photon:** installs to `/Library/Photon` and runs as a background service (a launchd daemon, `com.photon.server`). It starts with the Mac, keeps running when nobody is logged in, and restarts if it stops.
+- **Password:** asks you to choose the password you sign in to Photon with (typed twice, hidden). When you update, you can keep it or choose a new one. If you click *Choose it later*, Photon opens in your browser and asks for it there.
+- **Service account:** Photon runs under its own hidden account, `_photon`, instead of root. The account can't log in and has no password.
 - **Settings:** kept in `/Library/Application Support/Photon`, readable only by the service and admins. Updates never touch them.
 - **Apps:** **Photon** in Applications opens Photon in your browser. **Uninstall Photon** is in Applications > Utilities and lets you keep or delete your settings.
 - **Firewall:** if the macOS firewall is on, Photon is allowed through it so phones and other computers at home can open it.
@@ -75,7 +81,8 @@ The compose file uses host networking, because Govee and WiZ find lights with UD
 |---|---|---|
 | `PORT` | `8787` | Web UI and webhook port |
 | `HOST` | `0.0.0.0` | Interface to listen on |
-| `UI_PASSWORD` | none | If set, the web UI asks for this password (any username). Webhooks are protected separately by their secret key. |
+| `UI_PASSWORD` | none | Older setups used this for a browser password prompt. If Photon has no password yet, it becomes the sign-in password once (if it's at least 10 characters and not a common one). After that, change the password in the app. |
+| `PHOTON_HOSTNAMES` | none | Extra names Photon answers to, comma separated, such as `photon.home.lan`. See [Signing in and security](#signing-in-and-security). |
 | `CONFIG_PATH` | `./data/config.json` | Where settings are stored. Remembered players are kept next to it in `players.json`. |
 | `TZ` | system | Time zone for the time windows |
 | `HTTPS_PORT` | from settings (`8443`) | Overrides the HTTPS port set in the app |
@@ -178,6 +185,36 @@ Other settings:
 - **Webhooks** from Plex, Jellyfin and Emby stay on plain HTTP, so you don't need to change them, and your media server never has to trust Photon's certificate.
 
 Turning on HTTPS also lets **Use this device's location** work from other devices, because browsers only share location with secure pages.
+
+## Signing in and security
+
+**Your password.** The installers ask for it. If you run Photon by hand, the first time you open it Photon asks you to choose one, and for that it wants a one-time **setup code**. The code is printed when Photon starts and saved in the `setup-code` file next to your settings, so only someone with access to the computer running Photon can claim it. Passwords need at least 10 characters, and very common ones are refused. A few words together make a strong password that's easy to remember. Photon keeps only a salted scrypt hash of it, in `auth.json` next to the settings, never in `config.json`.
+
+**Staying signed in.** Signing in gives that browser a session cookie that page scripts can't read and other websites can't make the browser send. It lasts 30 days from the last time you used it, and 180 days at most. Every change also needs a token that only Photon's own page has, so another website, or another program on the same computer, can't change settings, reset anything or sign people out. Wrong passwords are slowed down, and after five in a row from one device it has to wait 15 minutes.
+
+**Change the password or sign everyone out** under **Connections > Password and sign-in**. Changing the password signs out every other device.
+
+**Forgot the password?** Run the installer again and choose a new one. Or, from an admin command prompt (Windows) or Terminal (Mac), run Photon's password tool:
+
+```
+# Windows (admin command prompt)
+set CONFIG_PATH=C:\ProgramData\Photon\config.json
+"C:\Program Files\nodejs\node.exe" "C:\Program Files\Photon\app\src\password.js" set
+
+# Mac
+sudo env CONFIG_PATH="/Library/Application Support/Photon/config.json" /Library/Photon/node/bin/node /Library/Photon/app/src/password.js set
+
+# Running by hand
+node src/password.js set
+```
+
+`password.js reset` removes the password instead, so Photon asks for a new one with a new setup code. On Android, clearing the app's storage does the same, but also clears its settings.
+
+**Keys and tokens stay on the server.** Your Plex token, light keys and TV pairing keys are never sent to the browser. The page sees that one is saved, and that's all.
+
+**Only its own addresses.** Photon answers at localhost, this computer's IP addresses, its name and `name.local`. A request for any other name is refused, which stops a trick called DNS rebinding, where a website points its own name at your network to talk to Photon. If you reach Photon by another name, such as `photon.home.lan` or a reverse proxy's name, add it under **Connections > Secure connection (HTTPS) > Other names**, or list it in `PHOTON_HOSTNAMES`.
+
+**Webhooks** don't sign in. They're checked against their secret key before Photon reads anything else from the request.
 
 ## Light and dark
 
