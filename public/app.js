@@ -2,6 +2,10 @@
 
 import { FURNITURE, SCREEN_KINDS, OUTDOOR_GROUPS } from './furniture.js';
 
+// Photon's Android app already keeps the page clear of the phone's status and navigation
+// bars, so the page shouldn't add room for them again (photon.css, the in-app class).
+if (window.PhotonAndroid) document.documentElement.classList.add('in-app');
+
 const EV = { play: 'Starts playing', pause: 'Paused', resume: 'Resumes', scrobble: 'Near the end', stop: 'Stops' };
 const EV_SHORT = { play: 'Starts', pause: 'Paused', resume: 'Resumes', scrobble: 'Near end', stop: 'Stops' };
 const MEDIA_LABEL = { movie: 'Movies', episode: 'TV episodes', music: 'Music', other: 'Other (live TV, clips)' };

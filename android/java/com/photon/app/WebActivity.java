@@ -65,7 +65,9 @@ public class WebActivity extends Activity {
             public WindowInsets onApplyWindowInsets(View v, WindowInsets in) {
                 v.setPadding(in.getSystemWindowInsetLeft(), in.getSystemWindowInsetTop(),
                         in.getSystemWindowInsetRight(), in.getSystemWindowInsetBottom());
-                return in;
+                // The padding already keeps the page clear of the bars. Used up here, so the web
+                // page doesn't also get them as safe-area space and leave the room twice.
+                return in.consumeSystemWindowInsets();
             }
         });
         setContentView(root);
