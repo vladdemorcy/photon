@@ -1,0 +1,18 @@
+Photon includes these third-party components:
+
+WinSW (Windows Service Wrapper) 2.12.0, MIT License
+  https://github.com/winsw/winsw
+  Used to run Photon as a Windows service (service\PhotonService.exe).
+
+Sora font, SIL Open Font License 1.1 (see fonts\Sora-OFL.txt)
+IBM Plex Sans font, SIL Open Font License 1.1 (see fonts\IBMPlexSans-OFL.txt)
+
+Node.js is downloaded from nodejs.org during setup if needed and is covered by its own license.
+JavaScript packages in app\node_modules each include their own license file.
+
+Lutron Caseta pairing certificates (app\src\lighting\lutron-certs.js), from pylutron-caseta,
+  Apache License 2.0, https://github.com/gurumitts/pylutron-caseta
+
+LG webOS registration manifest (app\src\media\tv\lg.js), from aiowebostv,
+  Apache License 2.0, https://github.com/home-assistant-libs/aiowebostv
+ws (WebSocket library), MIT License, https://github.com/websockets/ws
