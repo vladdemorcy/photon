@@ -16,14 +16,19 @@ on:
       - 'package-lock.json'
       - '.github/workflows/android.yml'
 
+# A newer push replaces a run that's still going.
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - name: Install build tools
         run: |
           sudo apt-get update -qq
@@ -31,7 +36,7 @@ jobs:
             apksigner zipalign dalvik-exchange clang lld patchelf zip
       - name: Build the APK
         run: bash android/build-apk.sh
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: photon-apk
           path: dist/Photon-*.apk
@@ -44,8 +49,8 @@ jobs:
       matrix:
         api-level: [30, 35]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
         with:
           name: photon-apk
           path: dist
@@ -64,7 +69,7 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: bash android/test/emulator-test.sh "$(ls dist/Photon-*.apk | head -1)" android-test-results
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: always()
         with:
           name: android-test-results-api${{ matrix.api-level }}
