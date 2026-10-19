@@ -1,0 +1,18 @@
+#!/bin/sh
+# Photon for Mac, before installing: stop the running Photon so its files can be replaced.
+# Settings in /Library/Application Support/Photon are never touched here.
+LOG_DIR="/Library/Application Support/Photon/logs"
+mkdir -p "$LOG_DIR"
+exec >>"$LOG_DIR/install.log" 2>&1
+echo "---- $(date) preinstall"
+
+if launchctl print system/com.photon.server >/dev/null 2>&1; then
+  echo "Stopping the Photon service"
+  launchctl bootout system/com.photon.server 2>/dev/null || launchctl unload /Library/LaunchDaemons/com.photon.server.plist 2>/dev/null
+fi
+# Any Photon left running outside the service (an older copy, or one started by hand from the installed files).
+pkill -f "/Library/Photon/app/src/server.js" 2>/dev/null && echo "Stopped a leftover Photon process"
+sleep 1
+# Replace the program files cleanly (the installer only adds files). Node.js and the port stay.
+rm -rf /Library/Photon/app /Library/Photon/support
+exit 0

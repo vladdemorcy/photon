@@ -1,0 +1,126 @@
+#!/bin/sh
+# Photon for Mac, after the files are in place:
+#   1. make sure there's a Node.js for Photon (its own copy in /Library/Photon/node)
+#   2. set up the settings folder, the background service, and the apps
+#   3. start Photon and check it answers
+set -u
+ROOT="/Library/Photon"
+DATA="/Library/Application Support/Photon"
+LOGS="$DATA/logs"
+PLIST="/Library/LaunchDaemons/com.photon.server.plist"
+NODE_MAJOR=22
+mkdir -p "$LOGS"
+exec >>"$LOGS/install.log" 2>&1
+echo "---- $(date) postinstall"
+
+fail() { echo "FAILED: $*"; exit 1; }
+
+# ---- Node.js ---------------------------------------------------------------
+NODE="$ROOT/node/bin/node"
+have_node() {
+  [ -x "$NODE" ] || return 1
+  v=$("$NODE" -v 2>/dev/null | sed 's/^v//; s/\..*//')
+  [ -n "$v" ] && [ "$v" -ge 20 ]
+}
+if have_node; then
+  echo "Using Node.js $("$NODE" -v) already in $ROOT/node"
+else
+  case "$(uname -m)" in arm64) ARCH=arm64 ;; *) ARCH=x64 ;; esac
+  BASE="https://nodejs.org/dist/latest-v${NODE_MAJOR}.x"
+  TMP=$(mktemp -d /tmp/photon-node.XXXXXX)
+  echo "Downloading Node.js $NODE_MAJOR for $ARCH"
+  curl -fsSL --retry 3 "$BASE/SHASUMS256.txt" -o "$TMP/SHASUMS256.txt" || fail "couldn't reach nodejs.org to download Node.js"
+  FILE=$(grep -E " node-v[0-9.]+-darwin-$ARCH\.tar\.gz$" "$TMP/SHASUMS256.txt" | head -1 | awk '{print $2}')
+  [ -n "$FILE" ] || fail "no Node.js download listed for darwin-$ARCH"
+  curl -fsSL --retry 3 "$BASE/$FILE" -o "$TMP/$FILE" || fail "Node.js download failed"
+  WANT=$(grep " $FILE\$" "$TMP/SHASUMS256.txt" | awk '{print $1}')
+  GOT=$(shasum -a 256 "$TMP/$FILE" | awk '{print $1}')
+  [ "$WANT" = "$GOT" ] || fail "the Node.js download didn't match nodejs.org's checksum"
+  rm -rf "$ROOT/node.new" && mkdir -p "$ROOT/node.new"
+  tar -xzf "$TMP/$FILE" -C "$ROOT/node.new" --strip-components 1 || fail "couldn't unpack Node.js"
+  rm -rf "$ROOT/node" && mv "$ROOT/node.new" "$ROOT/node"
+  rm -rf "$TMP"
+  echo "Installed Node.js $("$NODE" -v)"
+fi
+chown -R root:wheel "$ROOT"
+
+# ---- Settings folder --------------------------------------------------------
+# Only the service (root) and admins via sudo can read it: it holds sign-in tokens.
+mkdir -p "$DATA"
+chown -R root:wheel "$DATA"
+chmod 700 "$DATA"
+
+PORT=$(cat "$ROOT/port" 2>/dev/null | tr -dc '0-9')
+[ -n "$PORT" ] || PORT=8787
+echo "$PORT" > "$ROOT/port"
+chmod 644 "$ROOT/port"
+
+# ---- Background service (launchd) ------------------------------------------
+cat > "$PLIST" <<PL
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.photon.server</string>
+  <key>ProgramArguments</key>
+  <array><string>$NODE</string><string>$ROOT/app/src/server.js</string></array>
+  <key>WorkingDirectory</key><string>$ROOT/app</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PORT</key><string>$PORT</string>
+    <key>CONFIG_PATH</key><string>$DATA/config.json</string>
+    <key>PHOTON_SERVICE</key><string>1</string>
+    <key>NODE_ENV</key><string>production</string>
+  </dict>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>StandardOutPath</key><string>$LOGS/service.out.log</string>
+  <key>StandardErrorPath</key><string>$LOGS/service.err.log</string>
+</dict>
+</plist>
+PL
+chown root:wheel "$PLIST"
+chmod 644 "$PLIST"
+
+# ---- Apps: Photon in Applications, the uninstaller in Utilities -------------
+rm -rf "/Applications/Photon.app" "/Applications/Utilities/Uninstall Photon.app"
+cp -R "$ROOT/support/Photon.app" "/Applications/Photon.app"
+mkdir -p "/Applications/Utilities"
+cp -R "$ROOT/support/Uninstall Photon.app" "/Applications/Utilities/Uninstall Photon.app"
+chown -R root:admin "/Applications/Photon.app" "/Applications/Utilities/Uninstall Photon.app"
+chmod -R 755 "/Applications/Photon.app" "/Applications/Utilities/Uninstall Photon.app"
+touch "/Applications/Photon.app"
+
+# ---- Firewall: if the Mac's firewall is on, let Photon accept connections ----
+FW=/usr/libexec/ApplicationFirewall/socketfilterfw
+if [ -x "$FW" ] && "$FW" --getglobalstate 2>/dev/null | grep -qi enabled; then
+  "$FW" --add "$NODE" >/dev/null 2>&1
+  "$FW" --unblockapp "$NODE" >/dev/null 2>&1
+  echo "Allowed Photon through the macOS firewall"
+fi
+
+# ---- Start and check -----------------------------------------------------------
+launchctl bootstrap system "$PLIST" 2>/dev/null || launchctl load -w "$PLIST"
+launchctl enable system/com.photon.server 2>/dev/null
+launchctl kickstart -k system/com.photon.server 2>/dev/null
+OK=0
+i=0
+while [ $i -lt 40 ]; do
+  if curl -fs "http://127.0.0.1:$PORT/api/version" >/dev/null 2>&1; then OK=1; break; fi
+  sleep 1; i=$((i + 1))
+done
+if [ $OK -ne 1 ]; then
+  echo "Photon didn't answer on port $PORT. Last service errors:"
+  tail -n 20 "$LOGS/service.err.log" 2>/dev/null
+  fail "Photon was installed but didn't start"
+fi
+echo "Photon is running on port $PORT"
+
+# Open Photon for whoever is at the screen.
+USER_ID=$(stat -f %u /dev/console 2>/dev/null)
+USER_NAME=$(stat -f %Su /dev/console 2>/dev/null)
+if [ -n "$USER_ID" ] && [ "$USER_ID" != "0" ]; then
+  launchctl asuser "$USER_ID" sudo -u "$USER_NAME" open "http://localhost:$PORT/" 2>/dev/null &
+fi
+exit 0
