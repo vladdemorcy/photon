@@ -3,7 +3,7 @@
 # crash, stops and starts again. Used by .github/workflows/android.yml; works the same against
 # any emulator or phone that adb can see (a phone needs "adb root" for the crash test).
 #
-#   bash android/test/emulator-test.sh dist/Photon-1.4.3.apk [results-dir]
+#   bash android/test/emulator-test.sh dist/Photon-1.4.4.apk [results-dir]
 set -uo pipefail
 APK="$1"
 OUT="${2:-android-test-results}"
