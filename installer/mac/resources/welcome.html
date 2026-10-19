@@ -1,0 +1,29 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  :root { color-scheme: light dark; }
+  body { font: 13px/1.5 -apple-system, "Helvetica Neue", sans-serif; color: #1c2238; margin: 0 6px; }
+  h1 { font-size: 26px; font-weight: 650; letter-spacing: -.02em; margin: 4px 0 2px;
+       background: linear-gradient(90deg, #2f6bff, #38d9ff 55%, #a44dff); -webkit-background-clip: text; color: transparent; }
+  .lede { font-size: 14px; color: #4a5272; margin: 0 0 14px; }
+  ul { padding-left: 18px; margin: 6px 0 12px; }
+  li { margin: 3px 0; }
+  .muted { color: #6b7394; font-size: 12px; }
+  code { font: 12px ui-monospace, Menlo, monospace; }
+  @media (prefers-color-scheme: dark) {
+    body { color: #e6e9f5; }
+    .lede { color: #b4bbd6; }
+    .muted { color: #8e98bc; }
+  }
+</style></head>
+<body>
+  <h1>Photon</h1>
+  <p class="lede">Lights that follow what's playing. Your rooms dim when a movie starts, come up when you pause, and go back when it ends.</p>
+  <p>This installs:</p>
+  <ul>
+    <li><b>Photon</b>, running quietly in the background from when your Mac starts, even when nobody is logged in.</li>
+    <li>Its own copy of <b>Node.js</b>, downloaded from nodejs.org the first time (about 50 MB), so nothing else on your Mac is changed.</li>
+    <li><b>Photon</b> in Applications, which opens Photon in your browser, and <b>Uninstall Photon</b> in Applications &gt; Utilities.</li>
+  </ul>
+  <p class="muted">Your rooms and settings are kept in <code>/Library/Application Support/Photon</code>. Updating never touches them: just run a newer installer.</p>
+</body></html>
