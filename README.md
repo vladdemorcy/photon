@@ -2,7 +2,7 @@
 
 Photon sets each room's lights to match what's playing. When a movie starts on the living room TV, the lights you picked for that room dim down. When you pause, they come up, and when you stop, they go back to how they were. You decide what each event does, and you can make it depend on the time of day.
 
-**Lighting systems:** Philips Hue, Govee, LIFX, WiZ, Nanoleaf, IKEA Home smart (DIRIGERA hub), Treatlife and other Tuya / Smart Life devices, Lutron Caseta, and Home Assistant. Through Home Assistant you can also use Zigbee and Z-Wave bulbs, TP-Link Kasa, Lutron, Sengled, Yeelight, smart plugs with lamps, and anything else HA controls.
+**Lighting systems:** Philips Hue (and the Hue Play HDMI Sync Box), Govee (including DreamView sync boxes), LIFX, WiZ, Nanoleaf, IKEA Home smart (DIRIGERA hub), Treatlife and other Tuya / Smart Life devices, Lutron Caseta, and Home Assistant. Through Home Assistant you can also use Zigbee and Z-Wave bulbs, TP-Link Kasa, Lutron, Sengled, Yeelight, smart plugs with lamps, and anything else HA controls.
 **Media servers:** Plex, Jellyfin, Emby
 **Smart TVs:** Roku, LG webOS, Android TV / Google TV / Fire TV, Chromecast, Vizio, Samsung
 
@@ -10,11 +10,11 @@ Photon sets each room's lights to match what's playing. When a movie starts on t
 
 You can use more than one of each at the same time. A single room can mix Hue and Govee lights, for example, and respond to both Plex and Jellyfin players.
 
-**Version 1.5.** Photon now has a proper sign-in: you choose a password when you install it, and each browser stays signed in with a secure cookie. See [Signing in and security](#signing-in-and-security). 1.5.1 moves Photon's own options into a new **Settings** tab, so Connections is only for connecting lights, media servers and TVs. 1.4 added Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
+**Version 1.6** adds TV sync boxes (Hue Play HDMI Sync Box and Govee DreamView). **1.5** gave Photon a proper sign-in: you choose a password when you install it, and each browser stays signed in with a secure cookie. See [Signing in and security](#signing-in-and-security). 1.5.1 moves Photon's own options into a new **Settings** tab, so Connections is only for connecting lights, media servers and TVs. 1.4 added Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
 
 ## Install on Windows (easiest)
 
-Run **Photon-Setup-1.5.4.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
+Run **Photon-Setup-1.6.0.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
 
 - **Node.js:** checks for Node.js 18 or newer. If it's missing or too old, setup downloads the current LTS version from nodejs.org, checks it against nodejs.org's published SHA-256 checksums, and installs it to `C:\Program Files\nodejs`.
 - **Photon:** installs Photon to `C:\Program Files\Photon`. Everything it needs is included.
@@ -30,7 +30,7 @@ To update, run a newer Photon-Setup the same way. To remove Photon, use Settings
 
 ```
 set PHOTON_PASSWORD=the password you want
-Photon-Setup-1.5.4.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
+Photon-Setup-1.6.0.exe -Quiet [-Port 8787] [-InstallDir "D:\Photon"] [-ImportFrom "D:\old-photon"] [-NoFirewall] [-NoDesktopIcon]
 "C:\Program Files\Photon\Uninstall Photon.exe" -Quiet [-DeleteData]
 ```
 
@@ -40,7 +40,7 @@ Windows SmartScreen may warn that the installer is from an unknown publisher, be
 
 ## Install on a Mac
 
-Open **Photon-1.5.4.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
+Open **Photon-1.6.0.pkg** and follow the steps. It needs macOS 11 or newer, on Apple silicon or Intel, and asks for an admin password. Setup:
 
 - **Node.js:** downloads its own copy from nodejs.org the first time (checked against nodejs.org's checksums) and keeps it in `/Library/Photon/node`, so nothing else on your Mac changes.
 - **Photon:** installs to `/Library/Photon` and runs as a background service (a launchd daemon, `com.photon.server`). It starts with the Mac, keeps running when nobody is logged in, and restarts if it stops.
@@ -100,6 +100,7 @@ Turn on each system you own. Its color is how you'll tell its lights apart on th
 |---|---|
 | **Philips Hue** | Click *Find bridge* (or type the bridge IP), press the round button on the bridge, then click *Pair* within 30 seconds. |
 | **Govee** | In the Govee app, open each light's settings and turn on **LAN Control**. Photon finds those lights by itself. For models without LAN control, add a cloud API key (Govee app → Profile → Settings → Apply for API Key). The cloud API allows about two commands per second per device, so LAN control is faster. |
+| **Hue Sync Box** | The Philips Hue Play HDMI Sync Box (or the 8K model). Type its IP address (Hue Sync app > the box > Settings > Device info), click *Pair*, then hold the button on the box for about 3 seconds until it blinks green. Then pick it in a room under **Room settings > TV sync box**. |
 | **LIFX** | A personal access token from cloud.lifx.com → Settings. |
 | **WiZ** | Nothing. Bulbs are found by broadcast. If they're on a different subnet, list their IPs. |
 | **Nanoleaf** | Enter the panel IPs. Hold the power button on the controller for 5–7 seconds until the lights flash, then click *Pair*. Your effects show up as scenes. |
@@ -158,6 +159,16 @@ Apple TV isn't included: it has no local interface Photon can use for this. A TV
 - **Show when it…** above the plan previews the lights for each event, based on whichever behavior would run *right now*. **Run on real lights** sends that event to the room as if your media server had, so you can test without starting a movie.
 
 New rooms come with a starter set of behaviors: dim to 8% warm when playback starts, 45% when paused, restore on stop, and "credits" and "daytime: leave alone" behaviors that start switched off.
+
+### TV sync boxes
+
+A Hue Play HDMI Sync Box, or a Govee sync box or camera TV backlight with DreamView, colors lights from the picture on the TV. Photon decides when: pick the box in a room under **Room settings > TV sync box**, and it starts syncing when something starts or resumes and stops on pause and stop. Each behavior has a **TV sync box** choice if you want something else (start, stop, or leave it as it is).
+
+- **The box's lights are left to it.** Photon finds which of the room's lights the box colors (for Hue, the lights in its entertainment area; for Govee, the device itself) and doesn't touch them while it syncs, so the two never fight. You can change the list. The room's other lamps still dim and brighten as usual.
+- **Hue Sync Box:** choose the mode (automatic picks music mode for music and video mode for everything else), intensity and brightness. Photon remembers the box's certificate when you pair it and won't send its access token to anything else.
+- **Govee DreamView:** goes through Govee's cloud, so it needs your Govee API key in Connections. Govee's mode and intensity stay as set in the Govee app.
+- **Stopped:** the box goes back to how it was before playback started.
+- **Start syncing / Stop syncing** in Room settings try it straight away.
 
 ### Room settings
 

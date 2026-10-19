@@ -6,10 +6,14 @@
 //   apply(cfg, targetId, { on, brightness, kelvin, rgb, transition })
 //   snapshot(cfg, targetId) -> opaque, restore(cfg, targetId, snapshot, transition)
 //   scene?(cfg, sceneId, transition)
+// TV sync boxes (targets of type 'sync') also have:
+//   syncSet(cfg, targetId, { on, mode, intensity, brightness }), syncState(cfg, targetId) -> { on },
+//   syncLights(cfg, targetId, allLightingCfg) -> the light keys the box colors while it syncs
 // A target key used in rooms is "<providerId>::<targetId>".
 
 const providers = [
   require('./hue'),
+  require('./huesync'),
   require('./govee'),
   require('./lifx'),
   require('./wiz'),

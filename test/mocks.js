@@ -226,4 +226,38 @@ tuya.listen(8125);
     });
   }).listen(8081);
 }
+// Fake Hue Play HDMI Sync Box (https 8444). Pairing works on the second try, as if the
+// button was pressed in between. Its entertainment area is Hue group 4 (lights 1 and 4).
+{
+  const fx = f => fs.readFileSync(path.join(__dirname, 'fixtures', f));
+  let tries = 0;
+  const sync = { syncActive: false, mode: 'passthrough', hdmiSource: 'input1', brightness: 100, intensity: 'moderate' };
+  const box = express(); box.use(express.json());
+  box.post('/api/v1/registrations', (q, s) => (++tries < 2
+    ? s.status(400).json({ code: 16, message: 'Invalid State' })
+    : s.json({ registrationId: '1', accessToken: 'synctoken' })));
+  box.use('/api/v1', (q, s, n) => (q.headers.authorization === 'Bearer synctoken' ? n() : s.status(401).json({ code: 1, message: 'unauthorized' })));
+  box.get('/api/v1', (q, s) => s.json({ device: { name: 'Living room sync box' }, hue: { groupId: '4', groups: { 4: { name: 'Entertainment area', numLights: 2 } } }, execution: sync }));
+  box.put('/api/v1/execution', (q, s) => { calls.push(['sync-box', q.body]); Object.assign(sync, q.body, q.body.syncActive === false ? { mode: 'passthrough' } : {}); s.json({}); });
+  box.get('/sync-state', (q, s) => s.json(sync));
+  https.createServer({ key: fx('dirigera-key.pem'), cert: fx('dirigera-cert.pem') }, box).listen(8444);
+}
+
+// Fake Govee cloud (http 8126). One sync box with DreamView. Run Photon with
+// GOVEE_CLOUD_URL=http://127.0.0.1:8126.
+{
+  const gv = express(); gv.use(express.json());
+  const dv = { on: 0 };
+  gv.use((q, s, n) => (q.headers['govee-api-key'] === 'gkey' ? n() : s.status(401).json({ message: 'bad key' })));
+  gv.get('/user/devices', (q, s) => s.json({ data: [{ sku: 'H6604', device: 'AA:BB:CC:DD', deviceName: 'TV sync box', type: 'devices.types.light',
+    capabilities: [{ instance: 'powerSwitch' }, { instance: 'brightness' }, { instance: 'colorRgb' }, { instance: 'dreamViewToggle' }] }] }));
+  gv.post('/device/control', (q, s) => {
+    calls.push(['govee', q.body.payload.device, q.body.payload.capability]);
+    if (q.body.payload.capability.instance === 'dreamViewToggle') dv.on = q.body.payload.capability.value;
+    s.json({ code: 200 });
+  });
+  gv.post('/device/state', (q, s) => s.json({ payload: { capabilities: [{ instance: 'dreamViewToggle', state: { value: dv.on } }, { instance: 'powerSwitch', state: { value: 1 } }] } }));
+  gv.listen(8126);
+}
+
 console.log('mocks up');

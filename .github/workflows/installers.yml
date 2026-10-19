@@ -44,6 +44,13 @@ jobs:
           CONFIG_PATH="$RUNNER_TEMP/at/config.json" PORT=18820 node src/server.js > "$RUNNER_TEMP/photon.log" 2>&1 &
           for i in $(seq 1 30); do curl -sf http://127.0.0.1:18820/api/version >/dev/null && break; sleep 1; done
           node test/auth-test.js http://127.0.0.1:18820 "$RUNNER_TEMP/at"
+      - name: TV sync boxes (Hue Sync Box and Govee DreamView)
+        run: |
+          mkdir -p "$RUNNER_TEMP/sync"
+          printf '%s' 'sync test lights glow' | CONFIG_PATH="$RUNNER_TEMP/sync/config.json" node src/password.js set
+          PHOTON_NO_PEERS=1 GOVEE_CLOUD_URL=http://127.0.0.1:8126 CONFIG_PATH="$RUNNER_TEMP/sync/config.json" PORT=18830 node src/server.js > "$RUNNER_TEMP/sync.log" 2>&1 &
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:18830/api/version >/dev/null && break; sleep 1; done
+          node test/sync-test.js http://127.0.0.1:18830 'sync test lights glow' || { cat "$RUNNER_TEMP/sync.log"; exit 1; }
       - name: Two Photons on one network find each other
         run: |
           for n in 1 2; do

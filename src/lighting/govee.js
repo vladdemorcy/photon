@@ -15,7 +15,7 @@ const MULTICAST = '239.255.255.250';
 const SCAN_PORT = 4001;
 const LISTEN_PORT = 4002;
 const CONTROL_PORT = 4003;
-const CLOUD = 'https://openapi.api.govee.com/router/api/v1';
+const CLOUD = process.env.GOVEE_CLOUD_URL || 'https://openapi.api.govee.com/router/api/v1';
 
 const lan = new Map();     // device -> { ip, sku, lastSeen }
 const waiters = new Map(); // ip -> resolve fn for devStatus replies
@@ -129,9 +129,15 @@ module.exports = {
   async list(c) {
     if (c.lan !== false) await scan().catch(() => {});
     const byId = new Map();
+    const syncs = [];
     for (const d of await cloudDevices(c, true).catch(() => [])) {
       if (d.type && !String(d.type).includes('light')) continue;
       const caps = (d.capabilities || []).map(x => x.instance);
+      // Sync boxes and camera TV backlights: DreamView (Govee's picture sync) can be switched
+      // on and off through the cloud. A room picks it as its TV sync box.
+      if (caps.includes('dreamViewToggle')) {
+        syncs.push({ id: `${d.device}#sync`, name: `${d.deviceName || d.sku} (DreamView)`, type: 'sync', detail: `${d.sku}, cloud`, caps: { modes: [], intensities: [], brightness: false } });
+      }
       byId.set(d.device, {
         id: d.device, name: d.deviceName || d.sku, type: 'light', detail: `${d.sku}, cloud`, shape: goveeShape(d.sku, d.deviceName),
         caps: { dim: caps.includes('brightness'), temp: caps.includes('colorTemperatureK'), color: caps.includes('colorRgb') },
@@ -144,7 +150,26 @@ module.exports = {
         caps: { dim: true, temp: true, color: true },
       });
     }
-    return { targets: [...byId.values()], scenes: [] };
+    return { targets: [...byId.values(), ...syncs], scenes: [] };
+  },
+
+  // DreamView on or off. Govee's cloud doesn't take a mode or intensity for it, so those
+  // stay as set in the Govee app.
+  async syncSet(c, id, { on }) {
+    const device = id.replace(/#sync$/, '');
+    await cloudControl(c, device, await skuFor(c, device), 'devices.capabilities.toggle', 'dreamViewToggle', on ? 1 : 0);
+  },
+
+  async syncState(c, id) {
+    const device = id.replace(/#sync$/, '');
+    const res = await cloud(c, 'POST', '/device/state', { requestId: crypto.randomUUID(), payload: { sku: await skuFor(c, device), device } });
+    const v = (res?.payload?.capabilities || []).find(x => x.instance === 'dreamViewToggle')?.state?.value;
+    return { on: v === 1 };
+  },
+
+  // The box colors its own light bars and strip, which are this same Govee device.
+  async syncLights(c, id) {
+    return [`govee::${id.replace(/#sync$/, '')}`];
   },
 
   async apply(c, id, state) {
