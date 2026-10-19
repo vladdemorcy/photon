@@ -449,6 +449,8 @@ input.kelvin { --track: var(--kelvin); }
 .conn > section > header { margin-bottom: 12px; }
 .conn > section > header p { color: var(--muted); font-size: 14px; max-width: 70ch; }
 .settings-head h1 { margin-bottom: 4px; }
+.peers-warning { margin: 12px 16px 0; border-color: var(--warn); }
+.peers-warning > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .settings-head p { color: var(--muted); font-size: 14px; max-width: 70ch; }
 .sys { border-left: 3px solid var(--c); }
 .sys + .sys { margin-top: 10px; }
