@@ -47,7 +47,7 @@ final class Compat {
                     .newInstance(id, name, 2 /* NotificationManager.IMPORTANCE_LOW */);
             ch.getMethod("setShowBadge", boolean.class).invoke(channel, false);
             ch.getMethod("setDescription", String.class).invoke(channel,
-                    "Shown while Photon is running, with its address on your network.");
+                    "Shown while Photon is running, with a button to stop it.");
             NotificationManager nm = (NotificationManager) c.getSystemService(Context.NOTIFICATION_SERVICE);
             NotificationManager.class.getMethod("createNotificationChannel", ch).invoke(nm, channel);
         } catch (Exception e) {

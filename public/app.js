@@ -1849,7 +1849,9 @@ function bindJump() {
 function renderSettings() {
   const c = S.config;
   const sun = S.meta.sun;
-  const jump = [['set-account', 'Password'], ['tlsBox', 'HTTPS'], ['set-location', 'Location'], ['backupBox', 'Saved versions'], ['set-webhook', 'Webhook key']];
+  // On a phone, Photon only opens in the app itself, so there's no HTTPS to set up.
+  const phone = S.meta.onPhone;
+  const jump = [['set-account', 'Password'], ...(phone ? [] : [['tlsBox', 'HTTPS']]), ['set-location', 'Location'], ['backupBox', 'Saved versions'], ['set-webhook', 'Webhook key']];
   app.innerHTML = `<nav class="jump" aria-label="Jump to">
     ${jump.map(([id, label]) => `<button data-jump="${id}">${label}</button>`).join('')}
   </nav>
@@ -1870,7 +1872,7 @@ function renderSettings() {
       <div class="actions-row"><button class="btn sm" data-act="sign-out">Sign out of this device</button>
         <button class="btn sm danger" data-act="sign-out-all">Sign out everywhere</button></div>
     </section>
-    <section class="panel block" id="tlsBox">${tlsHtml()}</section>
+    ${phone ? '' : `<section class="panel block" id="tlsBox">${tlsHtml()}</section>`}
     <section class="panel block" id="set-location">
       <h2>Your location</h2>
       <p class="muted small">Used only to work out sunrise and sunset for time-based behaviors. Today: dawn ${sun.dawn}, sunrise ${sun.sunrise}, sunset ${sun.sunset}, dusk ${sun.dusk}${sun.usingFallback ? ' (typical times until you set a location)' : ''}.</p>
@@ -1903,9 +1905,10 @@ function renderSettings() {
   bindJump();
   bindAccount();
   bindAppSettings();
-  bindTls();
   loadBackups();
-  api('GET', '/api/tls').then(t => { S.tls = t; if (S.view === 'settings') { $('#tlsBox').innerHTML = tlsHtml(); } }).catch(() => {});
+  if (phone) return;
+  bindTls();
+  api('GET', '/api/tls').then(t => { S.tls = t; if (S.view === 'settings' && $('#tlsBox')) { $('#tlsBox').innerHTML = tlsHtml(); } }).catch(() => {});
 }
 
 function bindAppSettings() {
@@ -1989,6 +1992,16 @@ async function loadBackups() {
       const res = await fetch('/api/backups/export', { method: 'POST', headers: apiHeaders('POST', true), body: JSON.stringify({ password: $('#exportPw').value }), credentials: 'same-origin' });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `${res.status} ${res.statusText}`);
       const name = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '')?.[1] || 'photon-settings.json';
+      if (window.PhotonAndroid?.saveFile) {
+        // The app can't download; it asks Android where to save the file instead.
+        const text = await res.text();
+        const r = await new Promise(resolve => { window.__photonSaved = (req, out) => resolve(out); window.PhotonAndroid.saveFile(1, name, text); });
+        if (!r.ok) { if (!r.canceled) toast(r.error || "The file couldn't be saved.", true); btn.disabled = false; return; }
+        exp.reset();
+        toast('Saved. The file has your keys in it, so keep it private.');
+        btn.disabled = false;
+        return;
+      }
       const url = URL.createObjectURL(await res.blob());
       const a = Object.assign(document.createElement('a'), { href: url, download: name });
       document.body.append(a); a.click(); a.remove();
