@@ -11,3 +11,6 @@ Thumbs.db
 
 # Throwaway test certificates (see test/fixtures/README.md)
 test/fixtures/*.pem
+
+# Android build downloads (see android/build-apk.sh)
+android/vendor/
