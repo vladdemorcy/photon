@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#04060d">
   <title>Photon</title>
   <link rel="icon" type="image/png" href="photon-mark.png">
@@ -31,10 +31,17 @@
       <span class="brand-word">Photon</span>
     </a>
     <span class="version" id="appVersion" title="Photon version"></span>
+    <span class="page-title" id="pageTitle"></span>
     <nav class="tabs" aria-label="Sections">
-      <a href="#rooms" data-view="rooms">Rooms</a>
-      <a href="#connections" data-view="connections">Connections</a>
-      <a href="#activity" data-view="activity">Activity</a>
+      <a href="#rooms" data-view="rooms">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10.5 12 4l8 6.5V20H4z"/><path d="M10 20v-5h4v5"/></svg>
+        <span>Rooms</span></a>
+      <a href="#connections" data-view="connections">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.6 10.8c.7.5 1.1 1.3 1.1 2.2h5c0-.9.4-1.7 1.1-2.2A6 6 0 0 0 12 3z"/></svg>
+        <span>Connections</span></a>
+      <a href="#activity" data-view="activity">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg>
+        <span>Activity</span></a>
     </nav>
     <span class="save-state" id="saveState" role="status" aria-live="polite"></span>
     <div class="theme-switch" role="group" aria-label="Theme">
