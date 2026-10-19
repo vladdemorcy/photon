@@ -111,7 +111,9 @@ done
 STAGE="$OUT/photon"
 mkdir -p "$STAGE"
 cp -r "$ROOT/src" "$ROOT/public" "$ROOT/package.json" "$ROOT/package-lock.json" "$STAGE/"
-cp "$ANDROID/android-main.js" "$STAGE/"
+cp "$ANDROID/android-main.js" "$ANDROID/THIRD-PARTY.txt" "$STAGE/"
+mkdir -p "$STAGE/licenses"
+cp "$VENDOR/libnode/LICENSE" "$STAGE/licenses/nodejs-mobile-LICENSE.txt"
 (cd "$STAGE" && npm ci --omit=dev --no-audit --no-fund --ignore-scripts --loglevel=error)
 if find "$STAGE/node_modules" -name '*.node' | grep -q .; then
   echo "A package has a native add-on, which wouldn't run on Android. Stopping." >&2
