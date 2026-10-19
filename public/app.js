@@ -1835,6 +1835,7 @@ function renderConnections() {
         <div class="actions-row"><button class="btn sm" type="submit">Change password</button></div>
         <p class="muted small">Changing it signs out every other device.</p>
       </form>
+      ${bioSectionHtml()}
       <div class="actions-row"><button class="btn sm" data-act="sign-out">Sign out of this device</button>
         <button class="btn sm danger" data-act="sign-out-all">Sign out everywhere</button></div>
     </section>
@@ -2245,7 +2246,37 @@ function bindConnections() {
   $('#lat').addEventListener('change', locInput);
   $('#lon').addEventListener('change', locInput);
 }
+function bioSectionHtml() {
+  if (!bio) return '';
+  const st = bio.status().status;
+  const why = { 'no-lock': 'Set a screen lock and add a fingerprint or face in the phone\'s settings first.', 'none-enrolled': 'Add a fingerprint or face in the phone\'s settings first.', unsupported: 'This phone can\'t do it (it needs Android 9 or newer and a fingerprint reader or secure face unlock).' }[st];
+  return `<div class="bio-box" id="bioBox">
+    <h3>Fingerprint or face on this phone</h3>
+    ${st === 'on' ? `<p class="muted small">On. Photon asks for your fingerprint or face instead of the password in this app.</p>
+      <div class="actions-row"><button class="btn sm" type="button" data-act="bio-off">Turn off</button></div>`
+    : st === 'available' ? `<p class="muted small">Sign in to Photon in this app with your fingerprint or face instead of typing the password. It only works on this phone, and changing the password turns it off.</p>
+      <form id="bioForm" class="export-row" autocomplete="off">
+        <label class="field"><span>Your Photon password</span><input type="password" id="bioPw" autocomplete="current-password" required></label>
+        <button class="btn sm" type="submit">Turn on</button></form>`
+    : `<p class="muted small">${why}</p>`}
+  </div>`;
+}
+
+function bindAccountBio() {
+  $('#bioForm')?.addEventListener('submit', async e => {
+    e.preventDefault();
+    const btn = $('#bioForm button');
+    btn.disabled = true;
+    try {
+      if (await bio.enable($('#bioPw').value)) toast('Fingerprint or face sign-in is on for this phone.');
+      $('#bioBox').outerHTML = bioSectionHtml();
+      bindAccountBio();
+    } catch (err) { toast(err.message, true); btn.disabled = false; }
+  });
+}
+
 function bindAccount() {
+  bindAccountBio();
   $('#pwForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const cur = $('#pwCurrent').value, next = $('#pwNew').value, again = $('#pwAgain').value;
@@ -2261,6 +2292,13 @@ function bindAccount() {
     btn.disabled = false;
   });
   $('#conn-account')?.addEventListener('click', async e => {
+    if (e.target.closest('[data-act="bio-off"]')) {
+      await bio.disable();
+      toast('Fingerprint or face sign-in is off for this phone.');
+      $('#bioBox').outerHTML = bioSectionHtml();
+      bindAccountBio();
+      return;
+    }
     const act = e.target.closest('[data-act="sign-out"], [data-act="sign-out-all"]')?.dataset.act;
     if (!act) return;
     if (act === 'sign-out-all' && !confirm('Sign out every device, including this one?')) return;
@@ -2271,6 +2309,72 @@ function bindAccount() {
 
 // ---------------------------------------------------------------------------
 // SIGN IN
+// ---- Fingerprint or face sign-in (Photon's Android app) ----------------------------------
+// The app keeps a device key that only the phone's fingerprint or face can unlock, using
+// Android's keystore. Photon only ever gets the key, never anything about the fingerprint.
+const bio = (() => {
+  const A = window.PhotonAndroid;
+  if (!A?.biometricStatus) return null;
+  const pending = new Map();
+  let seq = 0;
+  window.__photonBiometric = r => { const p = pending.get(r.req); if (p) { pending.delete(r.req); p(r); } };
+  const call = (method, ...args) => new Promise(resolve => { const req = ++seq; pending.set(req, resolve); A[method](req, ...args); });
+  const status = () => { try { return JSON.parse(A.biometricStatus()); } catch { return { status: 'unsupported' }; } };
+  return {
+    status,
+    usable: () => ['available', 'on'].includes(status().status),
+    // Turns it on: Photon makes a device key (checking the password), the phone locks it
+    // behind the fingerprint or face. If the phone part doesn't finish, the key is removed.
+    async enable(password) {
+      const st = status();
+      const res = await fetch('/api/auth/devices', { method: 'POST', credentials: 'same-origin', headers: apiHeaders('POST', true), body: JSON.stringify({ password, name: st.model || 'Phone' }) });
+      const dev = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(dev.error || `${res.status} ${res.statusText}`);
+      const r = await call('biometricEnable', dev.id, dev.token);
+      if (!r.ok) {
+        fetch(`/api/auth/devices/${encodeURIComponent(dev.id)}`, { method: 'DELETE', credentials: 'same-origin', headers: apiHeaders('DELETE', false) }).catch(() => {});
+        if (r.canceled) return false;
+        throw new Error(r.error || "The phone didn't turn on fingerprint or face sign-in.");
+      }
+      return true;
+    },
+    async disable() {
+      const st = status();
+      call('biometricDisable');
+      if (st.id) await fetch(`/api/auth/devices/${encodeURIComponent(st.id)}`, { method: 'DELETE', credentials: 'same-origin', headers: apiHeaders('DELETE', false) }).catch(() => {});
+    },
+    // Asks for the fingerprint or face and signs in. Resolves true when signed in.
+    async signIn() {
+      const r = await call('biometricUnlock');
+      if (!r.ok) {
+        if (r.canceled) return false;
+        throw new Error(r.error || "Fingerprint or face sign-in didn't work. Use your password.");
+      }
+      const res = await fetch('/api/auth/device-login', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, token: r.token }) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        if (data.deviceGone) call('biometricDisable');
+        throw new Error(data.error || `${res.status} ${res.statusText}`);
+      }
+      return true;
+    },
+  };
+})();
+
+// Right after signing in with the password in the app: offer fingerprint or face next time.
+async function offerBiometric(password) {
+  if (!bio || bio.status().status !== 'available') return;
+  try { if (localStorage.getItem('photon.bioOffer') === 'no') return; } catch { /* no storage */ }
+  if (!confirm('Use your fingerprint or face to sign in to Photon on this phone next time?')) {
+    try { localStorage.setItem('photon.bioOffer', 'no'); } catch { /* no storage */ }
+    return;
+  }
+  try {
+    S.csrf = (await (await fetch('/api/auth/state', { credentials: 'same-origin' })).json()).csrf;
+    await bio.enable(password);
+  } catch (err) { alert(err.message); }
+}
+
 function showAuth(mode, { code = '', expired = false, minLength = 10 } = {}) {
   if (document.body.classList.contains('signed-out') && $('#authForm')?.dataset.mode === mode) return;
   S.config = null;
@@ -2304,12 +2408,25 @@ function showAuth(mode, { code = '', expired = false, minLength = 10 } = {}) {
         <label class="switch"><input type="checkbox" id="showPw"><i></i>Show password</label>
         <p class="result err" id="authErr" role="alert"></p>
         <button class="btn primary" type="submit">Sign in</button>
-        <p class="muted small">Forgot it? On the computer Photon runs on, run Photon's installer again and choose a new password, or see "Forgot the password" in the troubleshooting guide.</p>
+        ${bio?.status().status === 'on' ? '<button class="btn" type="button" id="bioSignIn">Sign in with fingerprint or face</button>' : ''}
+        <p class="muted small">${window.PhotonAndroid ? 'Forgot it? See "Forgot your password?" in Photon\'s install guide.' : 'Forgot it? On the computer Photon runs on, run Photon\'s installer again and choose a new password, or see "Forgot the password" in the troubleshooting guide.'}</p>
       </form>`}
   </section>`;
   const form = $('#authForm');
   $('#showPw').addEventListener('change', e => $$('input[type=password], input[data-pw]', form).forEach(i => { i.type = e.target.checked ? 'text' : 'password'; i.dataset.pw = '1'; }));
-  (mode === 'setup' && !code ? $('#setupCode') : $('#pw1')).focus();
+  const bioBtn = $('#bioSignIn');
+  if (bioBtn) {
+    const tryBio = async () => {
+      $('#authErr').textContent = '';
+      bioBtn.disabled = true;
+      try { if (await bio.signIn()) { location.reload(); return; } } catch (err) { $('#authErr').textContent = err.message; if (bio.status().status !== 'on') bioBtn.remove(); }
+      bioBtn.disabled = false;
+    };
+    bioBtn.addEventListener('click', tryBio);
+    tryBio(); // ask straight away, like other apps do; Cancel leaves the password field
+  } else {
+    (mode === 'setup' && !code ? $('#setupCode') : $('#pw1')).focus();
+  }
   form.addEventListener('submit', async e => {
     e.preventDefault();
     const err = $('#authErr');
@@ -2326,6 +2443,7 @@ function showAuth(mode, { code = '', expired = false, minLength = 10 } = {}) {
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
+      await offerBiometric(pw);
       location.reload();
     } catch (e2) {
       err.textContent = e2.message;

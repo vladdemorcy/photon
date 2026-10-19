@@ -38,6 +38,7 @@ Use this to run Photon without a computer that's always on. It works best on a s
 4. Open **Photon**. It starts right away and asks to show notifications. Say **Allow**, so you can see Photon's address and its Stop button in the notification shade.
 5. Tap **Let Photon run in the background** and choose **Allow**. Without this, Android may pause Photon when the screen is off.
 6. Tap **Open Photon**. The first time, it asks you to choose a password. The one-time setup code it needs is filled in for you, since you're on the phone itself. After that, sign in with that password on the phone or from any computer, phone or tablet at home, using the address the app shows (like `http://192.168.1.50:8787`). Setup is the same as on a computer (below).
+7. After you sign in with the password, Photon asks whether to use your fingerprint or face next time. Say **OK** and touch the sensor (or look at the phone). From then on the app asks for your fingerprint or face instead of the password. Turn it off or on again under **Connections > Password and sign-in**. It needs Android 9 or newer, a screen lock, and a fingerprint or face set up in the phone's settings.
 
 Photon runs as a background service with a notification while it's running, and starts again by itself when the phone restarts (you can turn that off in the app). Its settings stay on the phone.
 

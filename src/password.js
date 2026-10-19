@@ -63,7 +63,8 @@ async function main() {
     if (problem) { console.error(problem); process.exit(1); }
     await auth.setPassword(first);
     auth.endAllSessions();
-    console.log('Password set. Everyone who was signed in needs to sign in again.');
+    auth.removeAllDevices();
+    console.log('Password set. Everyone who was signed in needs to sign in again, and fingerprint or face sign-in has to be turned on again.');
     return;
   }
   console.error('Use: node src/password.js set | reset | status');
