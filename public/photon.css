@@ -470,10 +470,13 @@ input.kelvin { --track: var(--kelvin); }
 /* ---- Activity ---- */
 .activity { max-width: 980px; }
 .log { list-style: none; margin: 0; padding: 0; }
-.log li { display: grid; grid-template-columns: 76px 14px 1fr; gap: 10px; padding: 9px 16px; border-top: 1px solid var(--line); font-size: 14px; align-items: baseline; }
+.log li { display: grid; grid-template-columns: 76px 14px minmax(0, 1fr); gap: 10px; padding: 9px 16px; border-top: 1px solid var(--line); font-size: 14px; align-items: baseline; }
+/* Long addresses, IDs and error text wrap instead of widening the page. */
+.log li > span:last-child { min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
+.log .add-to-room { max-width: 100%; }
 .log li:first-child { border-top: 0; }
 .log time { color: var(--faint); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.log .dot { align-self: center; }
+.log .dot { align-self: start; margin-top: 6px; } /* next to the first line, also when the text wraps */
 .log .ok .dot { --c: var(--ok); }
 .log .error .dot { --c: var(--bad); }
 .log .warn .dot { --c: var(--warn); }
