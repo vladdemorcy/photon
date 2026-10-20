@@ -2,9 +2,9 @@
 
 Photon sets each room's lights to match what's playing. When a movie starts on the living room TV, the lights you picked for that room dim down. When you pause, they come up, and when you stop, they go back to how they were. You decide what each event does, and you can make it depend on the time of day.
 
-**Lighting systems:** Philips Hue (and the Hue Play HDMI Sync Box), Govee (including DreamView sync boxes), LIFX, WiZ, Nanoleaf, IKEA Home smart (DIRIGERA hub), Treatlife and other Tuya / Smart Life devices, Lutron Caseta, and Home Assistant. Through Home Assistant you can also use Zigbee and Z-Wave bulbs, TP-Link Kasa, Lutron, Sengled, Yeelight, smart plugs with lamps, and anything else HA controls.
-**Media servers:** Plex, Jellyfin, Emby
-**TVs and players:** Roku, LG webOS, Android TV / Google TV / Fire TV, Chromecast, Vizio, Samsung, Kodi (including LibreELEC, OSMC and CoreELEC)
+- **Lighting systems:** Philips Hue (and the Hue Play HDMI Sync Box), Govee (including DreamView sync boxes), LIFX, WiZ, Nanoleaf, IKEA Home smart (DIRIGERA hub), Treatlife and other Tuya / Smart Life devices, Lutron Caseta, and Home Assistant. Through Home Assistant you can also use Zigbee and Z-Wave bulbs, TP-Link Kasa, Lutron, Sengled, Yeelight, smart plugs with lamps, and anything else HA controls.
+- **Media servers:** Plex, Jellyfin, Emby
+- **TVs and players:** Roku, LG webOS, Android TV / Google TV / Fire TV, Chromecast, Vizio, Samsung, Kodi (including LibreELEC, OSMC and CoreELEC)
 
 **Download:** get the Windows and Mac installers and the Android app from this repository's **Releases** page. Step-by-step guides: [Installing Photon](docs/INSTALL.md) and [Troubleshooting](docs/TROUBLESHOOTING.md).
 
