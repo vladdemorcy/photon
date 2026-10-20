@@ -1,5 +1,7 @@
 <p align="center"><img src="docs/images/photon-banner.png" alt="Photon: your lights follow what's playing" width="720"></p>
 
+<p align="center"><a href="https://www.paypal.com/donate/?business=55NTF3K7DM966&amp;no_recurring=0&amp;item_name=Photon+App+development&amp;currency_code=USD"><img src="https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif" alt="Donate to Photon with PayPal"></a></p>
+
 Photon sets each room's lights to match what's playing. When a movie starts on the living room TV, the lights you picked for that room dim down. When you pause, they come up, and when you stop, they go back to how they were. You decide what each event does, and you can make it depend on the time of day.
 
 - **Lighting systems:** Philips Hue (and the Hue Play HDMI Sync Box), Govee (including DreamView sync boxes), LIFX, WiZ, Nanoleaf, IKEA Home smart (DIRIGERA hub), Treatlife and other Tuya / Smart Life devices, Wyze, Lutron Caseta, and Home Assistant. Through Home Assistant you can also use Zigbee and Z-Wave bulbs, TP-Link Kasa, Lutron, Sengled, Yeelight, smart plugs with lamps, and anything else HA controls.
@@ -25,6 +27,10 @@ The Android app runs Photon on the phone itself, with the same pages as the desk
 </table>
 
 **Version 1.8** adds Wyze lights. **1.7** added Kodi as a player, **1.6** TV sync boxes (Hue Play HDMI Sync Box and Govee DreamView). **1.5** gave Photon a proper sign-in: you choose a password when you install it, and each browser stays signed in with a secure cookie. See [Signing in and security](#signing-in-and-security). 1.5.1 moves Photon's own options into a new **Settings** tab, so Connections is only for connecting lights, media servers and TVs. 1.4 added Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
+
+## Support Photon
+
+Photon is free. If it makes movie night better and you'd like to help with its development, you can [donate through PayPal](https://www.paypal.com/donate/?business=55NTF3K7DM966&no_recurring=0&item_name=Photon+App+development&currency_code=USD). Thank you!
 
 ## Install on Windows (easiest)
 
