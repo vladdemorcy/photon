@@ -1940,7 +1940,7 @@ function renderConnections() {
   const lightsOn = on(S.meta.lighting.map(x => ({ kind: 'lighting', id: x.id })));
   const mediaOn = on(S.meta.media.filter(x => x.group !== 'tv').map(x => ({ kind: 'media', id: x.id })));
   const tvsOn = on(S.meta.media.filter(x => x.group === 'tv').map(x => ({ kind: 'media', id: x.id })));
-  const jump = [['conn-lights', 'Lights', lightsOn], ['conn-media', 'Media server', mediaOn], ['conn-tvs', 'Smart TVs', tvsOn]];
+  const jump = [['conn-lights', 'Lights', lightsOn], ['conn-media', 'Media server', mediaOn], ['conn-tvs', 'TVs and players', tvsOn]];
   app.innerHTML = `<nav class="jump" aria-label="Jump to">
     ${jump.map(([id, label, n]) => `<button data-jump="${id}">${label}${n ? `<span class="count">${n} on</span>` : ''}</button>`).join('')}
   </nav>
@@ -1954,7 +1954,7 @@ function renderConnections() {
       ${S.meta.media.filter(s => s.group !== 'tv').map(s => sysHtml('media', s)).join('')}
     </section>
     <section id="conn-tvs">
-      <header><h1>Smart TVs</h1><p>Lights can also follow whatever is playing on a TV or streaming box, from any app: Netflix, YouTube, Disney+ and the rest. Turn on the kinds you have, then pick the TV as a room's player.</p></header>
+      <header><h1>TVs and players</h1><p>Lights can also follow whatever is playing on a TV, a streaming box or Kodi, from any app: Netflix, YouTube, Disney+ and the rest. Turn on the kinds you have, then pick the TV or player as a room's player.</p></header>
       ${S.meta.media.filter(s => s.group === 'tv').map(s => sysHtml('media', s)).join('')}
     </section>
   </div>`;

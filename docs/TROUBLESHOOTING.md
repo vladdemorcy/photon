@@ -54,7 +54,7 @@ Photons find each other with a small broadcast on UDP port 47883 every 30 second
 ## Lights don't react when something plays
 
 1. Open **Activity** and start something playing.
-   - **Nothing shows up:** Photon isn't hearing from the player. See the media server or Smart TV sections below.
+   - **Nothing shows up:** Photon isn't hearing from the player. See the media server or TVs and players sections below.
    - **"isn't in a room yet":** add that player to a room (Activity has an *Add to a room* menu next to it).
    - **"ignored, X only reacts to …":** the room's *React to* setting excludes that kind of media or that person. Change it under the room's settings.
    - **"no behavior matches right now":** a time-of-day schedule excludes the current time, or the behavior for that event is turned off.
@@ -67,12 +67,14 @@ Photons find each other with a small broadcast on UDP port 47883 every 30 second
 - **Webhook:** needs Plex Pass on the owner's account. The Plex card shows whether Photon set it up.
 - **"Can't read playback from your Plex server":** type the server's address (for example `http://192.168.1.10:32400`) in the Plex card.
 
-## Smart TVs
+## TVs and players
 
-Open the TV's card under **Connections > Smart TVs**. It shows what each TV reported on the last check, or the exact problem.
+Open the TV's card under **Connections > TVs and players**. It shows what each TV reported on the last check, or the exact problem.
 
 - **Roku: "Limited" mode.** Newer Rokus block reading what's playing. On each Roku: Settings > System > Advanced system settings > Control by mobile apps > Network access > **Default** (or Permissive).
 - **Roku or TV not found.** Make sure it's on and on the same network as Photon, then click *Find on my network*, or type its IP address in the card.
+- **Kodi: "wants a username and password".** The username and password in Photon must match Kodi's Settings > Services > Control. Kodi 19 and newer won't answer without a password.
+- **Kodi not found.** Turn on *Allow remote control via HTTP* (Settings > Services > Control) and *Announce services to other systems* (Settings > Services > General), or just type its IP address. If you changed Kodi's web server port, put the same port in Photon. A Kodi that's closed doesn't answer, so it shows as stopped.
 - **LG:** click *Pair* and choose *Accept* on the TV. Turn on "TV On With Mobile" (or "Mobile TV On") in the TV's settings.
 - **Android TV / Fire TV:** turn on developer options and ADB or network debugging on the TV, then click *Pair* and choose *Allow* with "Always allow" ticked.
 - **Vizio and Samsung** only report on/off, not play or pause. For real play and pause, cast to them or use their Plex app.

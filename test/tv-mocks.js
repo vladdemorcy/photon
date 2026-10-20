@@ -1,7 +1,7 @@
 'use strict';
 // Stand-ins for Smart TVs, for trying the Smart TVs section without real TVs.
 // Run Photon with: ROKU (host 127.0.0.1:18060), SAMSUNG (127.0.0.1:18001), VIZIO_PORT=17345,
-// LG_WS_PORT=13000, CAST_PORT=18009, ADB_PORT=15555, all on host 127.0.0.1.
+// Kodi (127.0.0.1:18080, user kodi, password kodipass), LG_WS_PORT=13000, CAST_PORT=18009, ADB_PORT=15555, all on host 127.0.0.1.
 // Change what they report with POST http://127.0.0.1:18099/set {"tv":"roku","state":"play"}.
 const http = require('http');
 const https = require('https');
@@ -12,7 +12,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 
-const state = { roku: 'stop', samsung: 'on', vizio: 1, lg: 'unloaded', cast: 'IDLE', adb: 0 };
+const state = { kodi: 'stop', roku: 'stop', samsung: 'on', vizio: 1, lg: 'unloaded', cast: 'IDLE', adb: 0 };
 const log = [];
 const key = fs.readFileSync(path.join(__dirname, 'fixtures/dirigera-key.pem'));
 const cert = fs.readFileSync(path.join(__dirname, 'fixtures/dirigera-cert.pem'));
@@ -23,6 +23,23 @@ http.createServer((q, s) => {
     s.setHeader('Content-Type', 'application/json'); s.end(JSON.stringify({ state, log }));
   });
 }).listen(18099);
+
+// Kodi JSON-RPC (Basic auth kodi / kodipass). state.kodi: stop, play, pause or music.
+http.createServer((q, s) => {
+  let b = ''; q.on('data', d => { b += d; }); q.on('end', () => {
+    if (q.headers.authorization !== `Basic ${Buffer.from('kodi:kodipass').toString('base64')}`) { s.statusCode = 401; return s.end(); }
+    if (q.method !== 'POST' || q.url !== '/jsonrpc') { s.statusCode = 404; return s.end(); }
+    const { id, method } = JSON.parse(b);
+    const st = state.kodi;
+    const reply = result => { s.setHeader('Content-Type', 'application/json'); s.end(JSON.stringify({ jsonrpc: '2.0', id, result })); };
+    if (method === 'JSONRPC.Ping') return reply('pong');
+    if (method === 'XBMC.GetInfoLabels') return reply({ 'System.FriendlyName': 'Kodi (Den LibreELEC)' });
+    if (method === 'Player.GetActivePlayers') return reply(st === 'stop' ? [] : st === 'music' ? [{ playerid: 0, type: 'audio' }] : [{ playerid: 1, type: 'video' }, { playerid: 2, type: 'picture' }]);
+    if (method === 'Player.GetProperties') return reply({ speed: st === 'pause' ? 0 : 1, time: { hours: 0, minutes: 2, seconds: 5, milliseconds: 0 }, totaltime: { hours: 0, minutes: 44, seconds: 0, milliseconds: 0 } });
+    if (method === 'Player.GetItem') return reply({ item: st === 'music' ? { type: 'song', label: 'Song', title: 'Clair de Lune' } : { type: 'episode', label: 'Pilot', title: 'Pilot', showtitle: 'The Expanse', season: 1, episode: 1 } });
+    s.setHeader('Content-Type', 'application/json'); s.end(JSON.stringify({ jsonrpc: '2.0', id, error: { code: -32601, message: 'Method not found.' } }));
+  });
+}).listen(18080);
 
 // Roku ECP
 http.createServer((q, s) => {

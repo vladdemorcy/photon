@@ -4,13 +4,13 @@ Photon sets each room's lights to match what's playing. When a movie starts on t
 
 **Lighting systems:** Philips Hue (and the Hue Play HDMI Sync Box), Govee (including DreamView sync boxes), LIFX, WiZ, Nanoleaf, IKEA Home smart (DIRIGERA hub), Treatlife and other Tuya / Smart Life devices, Lutron Caseta, and Home Assistant. Through Home Assistant you can also use Zigbee and Z-Wave bulbs, TP-Link Kasa, Lutron, Sengled, Yeelight, smart plugs with lamps, and anything else HA controls.
 **Media servers:** Plex, Jellyfin, Emby
-**Smart TVs:** Roku, LG webOS, Android TV / Google TV / Fire TV, Chromecast, Vizio, Samsung
+**TVs and players:** Roku, LG webOS, Android TV / Google TV / Fire TV, Chromecast, Vizio, Samsung, Kodi (including LibreELEC, OSMC and CoreELEC)
 
 **Download:** get the Windows and Mac installers and the Android app from this repository's **Releases** page. Step-by-step guides: [Installing Photon](docs/INSTALL.md) and [Troubleshooting](docs/TROUBLESHOOTING.md).
 
 You can use more than one of each at the same time. A single room can mix Hue and Govee lights, for example, and respond to both Plex and Jellyfin players.
 
-**Version 1.6** adds TV sync boxes (Hue Play HDMI Sync Box and Govee DreamView). **1.5** gave Photon a proper sign-in: you choose a password when you install it, and each browser stays signed in with a secure cookie. See [Signing in and security](#signing-in-and-security). 1.5.1 moves Photon's own options into a new **Settings** tab, so Connections is only for connecting lights, media servers and TVs. 1.4 added Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
+**Version 1.7** adds Kodi as a player. **1.6** added TV sync boxes (Hue Play HDMI Sync Box and Govee DreamView). **1.5** gave Photon a proper sign-in: you choose a password when you install it, and each browser stays signed in with a secure cookie. See [Signing in and security](#signing-in-and-security). 1.5.1 moves Photon's own options into a new **Settings** tab, so Connections is only for connecting lights, media servers and TVs. 1.4 added Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
 
 ## Install on Windows (easiest)
 
@@ -128,9 +128,9 @@ Each server gets its own webhook address, which you'll see on its card. The addr
 
 **Emby:** Use polling (URL and API key) or Emby Premiere webhooks with Playback Start, Pause, Unpause and Stop.
 
-### Smart TVs (optional)
+### TVs and players (optional)
 
-Under **Connections > Smart TVs**, Photon can follow whatever is playing on a TV or streaming box, from any app (Netflix, YouTube, Disney+, Prime Video and so on), not only your media server. Turn on the kinds you have, then pick the TV as a room's player like any other.
+Under **Connections > TVs and players**, Photon can follow whatever is playing on a TV, a streaming box or Kodi, from any app (Netflix, YouTube, Disney+, Prime Video and so on), not only your media server. Turn on the kinds you have, then pick the TV or player as a room's player like any other.
 
 | TV | What it reports | Setup |
 |---|---|---|
@@ -140,6 +140,7 @@ Under **Connections > Smart TVs**, Photon can follow whatever is playing on a TV
 | **Chromecast** (and TVs with Chromecast built in, including most Vizio, Sony, TCL and Hisense TVs) | Play and pause for anything cast from a phone or computer | Nothing to pair. Found by itself. |
 | **Vizio** | Only on/off and which input is showing, so "TV on" counts as playing and "TV off" as stopped | Click *Pair*, type the PIN the TV shows, and click *Finish pairing*. For real play and pause on a Vizio, cast to it or use its Plex app. |
 | **Samsung TV** | Only on/off, used the same way as Vizio | Nothing to pair. |
+| **Kodi** (and LibreELEC, OSMC, CoreELEC, or Kodi on a Shield or Fire TV) | Play, pause and stop for anything Kodi plays, from your library or any add-on, with the title and whether it's a movie, an episode or music | In Kodi: Settings > Services > Control, turn on *Allow remote control via HTTP* and set a username and password. Put the same username, password and port (8080 unless you changed it) in Photon. To be found by itself, also turn on *Announce services to other systems* under Settings > Services > General; otherwise type its IP address. |
 
 Apple TV isn't included: it has no local interface Photon can use for this. A TV that's off or asleep simply shows as stopped.
 
@@ -262,7 +263,7 @@ src/schedule.js        time windows, sunrise/sunset
 src/lighting/*.js      one file per lighting system (same interface)
 src/media/*.js         Plex, Jellyfin/Emby, and the event de-duplicator
 public/                the web UI (no build step), 3D view in room3d.js, furniture sizes in furniture.js
-test/tv-mocks.js       stand-in Roku, LG, Android TV, Chromecast, Vizio and Samsung TVs
+test/tv-mocks.js       stand-in Roku, LG, Android TV, Chromecast, Vizio, Samsung and Kodi
 test/mocks.js          fake Hue bridge, Home Assistant, IKEA hub, Lutron bridge, Tuya cloud and plex.tv for trying things out (run Photon with PLEX_TV_URL=http://127.0.0.1:8124
                        DIRIGERA_EXTRA_CA=test/fixtures/dirigera-cert.pem LUTRON_EXTRA_CA=test/fixtures/lutron-ca.pem TUYA_BASE_URL=http://127.0.0.1:8125)
 ```
