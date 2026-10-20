@@ -66,7 +66,7 @@ function parseDns(buf) {
     const r = { name, type };
     if (type === 1) r.a = [...buf.subarray(data, data + 4)].join('.');
     else if (type === 12) r.ptr = readName(buf, data).name;
-    else if (type === 33) r.target = readName(buf, data + 6).name;
+    else if (type === 33) { r.port = buf.readUInt16BE(data + 4); r.target = readName(buf, data + 6).name; }
     else if (type === 16) {
       r.txt = {};
       for (let p = data; p < data + len;) { const l = buf[p]; const s = buf.toString('utf8', p + 1, p + 1 + l); const i = s.indexOf('='); if (i > 0) r.txt[s.slice(0, i)] = s.slice(i + 1); p += 1 + l; }
@@ -89,7 +89,8 @@ function mdns(service, ms = 2500) {
       if (!recs.some(r => r.type === 12 && r.name === service) && !recs.some(r => r.name.endsWith(service))) return;
       const txt = recs.find(r => r.type === 16)?.txt || {};
       const a = recs.find(r => r.type === 1)?.a || rinfo.address;
-      found.set(a, { host: a, name: txt.fn || recs.find(r => r.type === 12)?.ptr?.split('.')[0] || a, txt });
+      const port = recs.find(r => r.type === 33)?.port;
+      found.set(a, { host: a, name: txt.fn || recs.find(r => r.type === 12)?.ptr?.split('.')[0] || a, txt, ...(port ? { port } : {}) });
     });
     sock.bind(0, () => {
       const q = Buffer.concat([Buffer.from([0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0]), encodeName(service), Buffer.from([0, 12, 0, 1])]);

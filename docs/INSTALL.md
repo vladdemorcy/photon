@@ -52,7 +52,7 @@ If you ran Photon by hand (not with an installer), the first time you open it, i
 
 1. **Connections > Lights:** turn on each lighting system you have and pair or sign in (Hue: press the bridge button, then *Pair*).
 2. **Connections > Media server:** click *Sign in with Plex* (or set up Jellyfin or Emby). Photon adds its Plex webhook to your account for you if you have Plex Pass.
-3. **Connections > Smart TVs (optional):** turn on Roku, LG, Android TV / Fire TV, Chromecast, Vizio or Samsung to follow any app on the TV, not just Plex.
+3. **Connections > TVs and players (optional):** turn on Roku, LG, Android TV / Fire TV, Chromecast, Vizio, Samsung or Kodi to follow any app on the TV, not just Plex.
 4. **Rooms:** make a room, drag its lights onto the floor plan, and pick the player (TV or streaming box) in that room. The default behaviors dim the lights on play, bring them up on pause and put them back on stop. Change any of them per event and time of day.
 
 ## Updating

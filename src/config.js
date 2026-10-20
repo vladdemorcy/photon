@@ -147,7 +147,7 @@ function clampNum(v, lo, hi, d) {
 const DEFAULT_COLORS = {
   hue: '#f5b301', huesync: '#e8a000', govee: '#2ec4b6', lifx: '#ff5d8f', wiz: '#4cc9f0', nanoleaf: '#7bd389', dirigera: '#0a6fd6', tuya: '#ff7a3d', lutron: '#c9a227', homeassistant: '#5b8cff',
   plex: '#e5a00d', jellyfin: '#aa5cc3', emby: '#52b54b',
-  roku: '#6f1ab1', lg: '#a50034', androidtv: '#3ddc84', cast: '#4285f4', vizio: '#8e97ab', samsung: '#1428a0',
+  roku: '#6f1ab1', lg: '#a50034', androidtv: '#3ddc84', cast: '#4285f4', vizio: '#8e97ab', samsung: '#1428a0', kodi: '#17b2e7',
 };
 
 function normalizeIntegrations(list, saved = {}) {
