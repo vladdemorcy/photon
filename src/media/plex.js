@@ -207,7 +207,7 @@ function serverLanAddresses(c) {
 module.exports = {
   id: 'plex',
   label: 'Plex',
-  blurb: 'Sign in with your Plex account so Photon knows your server and who is in your Plex Home. Photon watches what is playing on your server, including anything cast from a phone. A Plex webhook (needs Plex Pass) makes it react a little faster.',
+  blurb: 'Sign in with your Plex account so Photon knows your server and who is in your Plex Home. Photon watches what is playing on your server, including anything cast from a phone. A Plex webhook (needs Plex Pass) makes it react a little faster. No Plex Media Server of your own, just a free Plex account? Then there\'s no server for Photon to watch: turn on your TV under TVs and players and use it as the room\'s player instead.',
   fields: [
     { key: 'homeOnly', label: 'Only react to people in my Plex Home', type: 'checkbox', default: true },
     { key: 'poll', label: 'Watch playback on my server (catches casting, no Plex Pass needed)', type: 'checkbox', default: true },

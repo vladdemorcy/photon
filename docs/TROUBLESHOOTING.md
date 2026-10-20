@@ -66,6 +66,7 @@ Photons find each other with a small broadcast on UDP port 47883 every 30 second
 - **Only Plex Home users** trigger lights when *Only react to people in my Plex Home* is on.
 - **Webhook:** needs Plex Pass on the owner's account. The Plex card shows whether Photon set it up.
 - **"Can't read playback from your Plex server":** type the server's address (for example `http://192.168.1.10:32400`) in the Plex card.
+- **No Plex server (free Plex account):** the Plex connection needs your own Plex Media Server. Plex's free movies, shows and Live TV stream from Plex's servers, which Photon can't see. Turn on your TV under **Connections > TVs and players** and use the TV as the room's player instead. See [No Plex server?](../README.md#no-plex-server) in the README for what each kind of TV reports.
 
 ## TVs and players
 

@@ -3,7 +3,7 @@
 Photon sets each room's lights to match what's playing. When a movie starts on the living room TV, the lights you picked for that room dim down. When you pause, they come up, and when you stop, they go back to how they were. You decide what each event does, and you can make it depend on the time of day.
 
 - **Lighting systems:** Philips Hue (and the Hue Play HDMI Sync Box), Govee (including DreamView sync boxes), LIFX, WiZ, Nanoleaf, IKEA Home smart (DIRIGERA hub), Treatlife and other Tuya / Smart Life devices, Wyze, Lutron Caseta, and Home Assistant. Through Home Assistant you can also use Zigbee and Z-Wave bulbs, TP-Link Kasa, Lutron, Sengled, Yeelight, smart plugs with lamps, and anything else HA controls.
-- **Media servers:** Plex, Jellyfin, Emby
+- **Media servers:** Plex, Jellyfin, Emby (Plex needs your own Plex Media Server; for a free Plex account without one, see [No Plex server?](#no-plex-server))
 - **TVs and players:** Roku, LG webOS, Android TV / Google TV / Fire TV, Chromecast, Vizio, Samsung, Kodi (including LibreELEC, OSMC and CoreELEC)
 
 **Download:** get the Windows and Mac installers and the Android app from this repository's **Releases** page. Step-by-step guides: [Installing Photon](docs/INSTALL.md) and [Troubleshooting](docs/TROUBLESHOOTING.md).
@@ -136,6 +136,21 @@ Each server gets its own webhook address, which you'll see on its card. The addr
 - **Webhook (optional, set up for you):** a Plex webhook makes Photon react a moment faster. It needs Plex Pass on the owner's account. While you're signed in, Photon adds its webhook address to your Plex account by itself and keeps it current: after an update, a new webhook key, or a new IP address for this computer, it swaps out the old Photon address and leaves any other webhooks (Home Assistant, Tautulli and so on) alone. The Plex card shows whether it's set. Turn off *Add Photon's webhook to my Plex account* if you'd rather manage it in Plex Web yourself. Using the webhook and server watching together never makes anything happen twice.
 - **Players only from your network:** the player list only shows devices on your home network. That means the ones plex.tv sees at your internet address, plus the ones your server can see on your network right now. Devices in other homes and old devices elsewhere are left out. Hover over a player and click × to hide it. "Show them again" brings hidden players back.
 - **Cast devices:** if a TV you cast to shows up under a different ID than the one in your room, Photon still matches it by its name. Any player that isn't in a room yet appears in Activity with an **Add to a room** menu.
+
+#### No Plex server?
+
+Photon's Plex connection works by asking your own Plex Media Server what's playing. With a free Plex account and no server, for example when you only watch Plex's free movies, shows and Live TV, there's no server to ask: that playback streams from Plex's own servers, which don't tell outside apps what's playing. Plex Pass doesn't change this, since webhooks also come from a server.
+
+You can still use Photon by following the TV instead. Under **Connections > TVs and players**, turn on the kind of TV or box you watch Plex on, then pick that TV as the room's player:
+
+| Where you watch Plex | What Photon sees |
+|---|---|
+| Roku | Play, pause and stop. The title shows as "Plex" rather than the show's name, so rules that only react to movies can't tell a movie from an episode. |
+| Android TV, Google TV, Fire TV, NVIDIA Shield | Play and pause |
+| LG webOS TV | Play and pause, for most apps |
+| Chromecast (casting Plex from your phone) | Play and pause |
+| Samsung and Vizio TVs | Only on or off, so "TV on" counts as playing |
+| A phone, tablet or web browser | Nothing. Without a server, Photon has no way to see this. |
 
 **Jellyfin**, either way works, and you can use both:
 - *Polling, no plugin:* add the server URL and an API key (Dashboard → API Keys), then turn on *Poll for playback*. Photon checks every 2 seconds.
