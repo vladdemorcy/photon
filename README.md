@@ -1,4 +1,4 @@
-<p align="center"><img src="public/photon-logo.jpg" alt="Photon" width="640"></p>
+<p align="center"><img src="docs/images/photon-banner.png" alt="Photon: your lights follow what's playing" width="720"></p>
 
 Photon sets each room's lights to match what's playing. When a movie starts on the living room TV, the lights you picked for that room dim down. When you pause, they come up, and when you stop, they go back to how they were. You decide what each event does, and you can make it depend on the time of day.
 
