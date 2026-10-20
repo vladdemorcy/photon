@@ -20,6 +20,7 @@ const providers = [
   require('./nanoleaf'),
   require('./dirigera'),
   require('./tuya'),
+  require('./wyze'),
   require('./lutron'),
   require('./homeassistant'),
 ];

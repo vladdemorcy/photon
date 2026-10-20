@@ -53,6 +53,8 @@ jobs:
           node test/sync-test.js http://127.0.0.1:18830 'sync test lights glow' || { cat "$RUNNER_TEMP/sync.log"; exit 1; }
       - name: Kodi player
         run: node test/kodi-test.js
+      - name: Wyze lights
+        run: node test/wyze-test.js
       - name: Two Photons on one network find each other
         run: |
           for n in 1 2; do

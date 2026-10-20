@@ -260,4 +260,55 @@ tuya.listen(8125);
   gv.listen(8126);
 }
 
+// Wyze cloud (auth and app API on one port, 8127). Account wyze@example.com / wyzepass, or
+// mfa@example.com for two-step sign-in with code 123456. Key ID wkid, API key wkey.
+{
+  const crypto = require('crypto');
+  const md5 = x => crypto.createHash('md5').update(x).digest('hex');
+  const PASS = md5(md5(md5('wyzepass')));
+  const wz = express(); wz.use(express.json()); wz.use(express.urlencoded({ extended: false }));
+  const valid = new Set();
+  let n = 0;
+  const tokens = () => { n++; const t = { access_token: `acc${n}`, refresh_token: `ref${n}` }; valid.add(t.access_token); return t; };
+  const lights = {
+    WYZE1: { product_type: 'MeshLight', product_model: 'WLPA19C', nickname: 'Den color bulb', props: { P3: '0', P1501: '80', P1502: '3000', P1507: 'FFAA00', P1508: '2' } },
+    WYZE2: { product_type: 'Light', product_model: 'WLPA19', nickname: 'Hall bulb', props: { P3: '1', P1501: '100', P1502: '4000' } },
+    WYZE3: { product_type: 'LightStrip', product_model: 'HL_LSL', nickname: 'TV light strip', props: { P3: '1', P1501: '60', P1507: '00FF88', P1508: '1' } },
+  };
+  wz.post('/api/user/login', (q, s) => {
+    calls.push(['wyze', 'login', q.body.email, '']);
+    if (q.headers.keyid !== 'wkid' || q.headers.apikey !== 'wkey') return s.json({ errorCode: 1001, description: 'invalid api key' });
+    if (q.body.password !== PASS) return s.json({ errorCode: 1000, description: 'UserIsLocked or wrong password' });
+    if (q.body.email === 'mfa@example.com') return s.json({ mfa_options: ['TotpVerificationCode'], mfa_details: { totp_apps: [{ app_id: 'totp-app-1' }] }, access_token: '' });
+    s.json(tokens());
+  });
+  wz.post('/user/login', (q, s) => {
+    if (q.body.verification_id !== 'totp-app-1' || q.body.verification_code !== '123456' || q.body.password !== PASS) return s.status(400).json({ errorCode: 1006, description: 'wrong code' });
+    s.json(tokens());
+  });
+  wz.post('/expire', (q, s) => { valid.clear(); s.json({ ok: true }); });
+  wz.post('/app/user/refresh_token', (q, s) => {
+    if (!/^ref\d+$/.test(q.body.refresh_token || '')) return s.json({ code: '2001', msg: 'refresh token is error' });
+    s.json({ code: '1', data: tokens() });
+  });
+  wz.use('/app', (q, s, next) => {
+    if (!valid.has(q.body.access_token)) return s.json({ code: '2001', msg: 'access token is error' });
+    next();
+  });
+  wz.post('/app/v2/home_page/get_object_list', (q, s) => s.json({ code: '1', data: { device_list: [
+    ...Object.entries(lights).map(([mac, l]) => ({ mac, product_type: l.product_type, product_model: l.product_model, nickname: l.nickname, conn_state: 1, device_params: {} })),
+    { mac: 'CAM1', product_type: 'Camera', product_model: 'WYZE_CAKP2JFUS', nickname: 'Porch camera' },
+  ] } }));
+  wz.post('/app/v2/device/get_property_list', (q, s) => s.json({ code: '1', data: { property_list: Object.entries(lights[q.body.device_mac]?.props || {}).map(([pid, value]) => ({ pid, value })) } }));
+  const setProps = (mac, list, via) => { calls.push(['wyze', via, mac, list.map(p => `${p.pid}=${p.pvalue}`).join(' ')]); for (const p of list) lights[mac].props[p.pid] = String(p.pvalue); };
+  wz.post('/app/v2/auto/run_action_list', (q, s) => {
+    for (const a of q.body.action_list || []) for (const d of a.action_params?.list || []) setProps(d.mac, d.plist, `action:${a.action_key}`);
+    s.json({ code: '1', data: {} });
+  });
+  wz.post('/app/v2/device/set_property_list', (q, s) => { setProps(q.body.device_mac, q.body.property_list, 'device'); s.json({ code: '1', data: {} }); });
+  wz.post('/app/v2/device_list/set_property_list', (q, s) => { for (const d of q.body.device_list) setProps(d.device_mac, d.property_list, 'bulk'); s.json({ code: '1', data: {} }); });
+  wz.get('/state', (q, s) => s.json(lights));
+  wz.listen(8127);
+}
+
 console.log('mocks up');
