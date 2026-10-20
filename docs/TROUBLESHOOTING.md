@@ -91,6 +91,9 @@ Open the TV's card under **Connections > TVs and players**. It shows what each T
 - **Wyze: "refused the sign-in".** Check the email and password you use in the Wyze app, and that the API key and key ID come from the same key at developer-api-console.wyze.com. Wyze shows the API key only once, so if you lost it, make a new key.
 - **Wyze: "needs you to sign in again".** Click *Sign in to Wyze*. Accounts with two-step verification need the code each time, so Photon never signs in on its own for them.
 - **Wyze lights are slow or skip a change.** Wyze lights only take commands through Wyze's cloud, which adds about a second, and Wyze limits how often an account can send commands. A light that's switched off at the wall shows as offline.
+- **Yeelight not found:** turn on *LAN Control* for each light in the Yeelight app (open the light, tap the settings icon, then LAN Control). Lights set up in Mi Home have the same switch there. If the light is on a different part of your network than Photon (a guest network, or another subnet), type its IP in the Yeelight card.
+- **Yeelight: "refused the connection":** LAN Control is off for that light, or it was reset. Turn LAN Control back on in the Yeelight app.
+- **Yeelight: "too many commands":** Yeelights accept about one command a second. Photon stays well under that, but another app or automation controlling the same light at the same time can use up the allowance. It recovers within a minute.
 
 ## Android
 

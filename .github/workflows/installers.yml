@@ -55,6 +55,8 @@ jobs:
         run: node test/kodi-test.js
       - name: Wyze lights
         run: node test/wyze-test.js
+      - name: Yeelight lights
+        run: node test/yeelight-test.js
       - name: Two Photons on one network find each other
         run: |
           for n in 1 2; do

@@ -21,6 +21,7 @@ const providers = [
   require('./dirigera'),
   require('./tuya'),
   require('./wyze'),
+  require('./yeelight'),
   require('./lutron'),
   require('./homeassistant'),
 ];

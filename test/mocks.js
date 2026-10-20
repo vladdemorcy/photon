@@ -311,4 +311,54 @@ tuya.listen(8125);
   wz.listen(8127);
 }
 
+// Yeelights: a search answer on UDP 19820 (run Photon with YEELIGHT_SEARCH=127.0.0.1:19820) and two
+// lights on TCP: a color bulb on 15543 and a white-only one on 15544. Like real Yeelights, a light
+// that's off refuses brightness and color, and each light pushes a "props" notice after a change.
+{
+  const dgram = require('dgram');
+  const net = require('net');
+  const yl = {
+    '0x00000000aa01': { port: 15543, model: 'color4', name: 'Bedroom lamp', support: 'get_prop set_default set_power toggle set_bright set_ct_abx set_rgb set_hsv set_scene set_name', p: { power: 'off', bright: 70, ct: 4000, rgb: 16711680, hue: 0, sat: 100, color_mode: 2 } },
+    '0x00000000aa02': { port: 15544, model: 'mono', name: '', support: 'get_prop set_default set_power toggle set_bright set_name', p: { power: 'on', bright: 100, ct: 2700, rgb: 0, hue: 0, sat: 0, color_mode: 2 } },
+  };
+  const ylLog = [];
+  const udp = dgram.createSocket('udp4');
+  udp.on('message', (m, r) => {
+    if (!/M-SEARCH/.test(m.toString())) return;
+    for (const [id, l] of Object.entries(yl)) {
+      udp.send(Buffer.from(`HTTP/1.1 200 OK\r\nCache-Control: max-age=3600\r\nLocation: yeelight://127.0.0.1:${l.port}\r\nServer: POSIX UPnP/1.0 YGLC/1\r\nid: ${id}\r\nmodel: ${l.model}\r\nfw_ver: 26\r\nsupport: ${l.support}\r\npower: ${l.p.power}\r\nbright: ${l.p.bright}\r\ncolor_mode: ${l.p.color_mode}\r\nct: ${l.p.ct}\r\nrgb: ${l.p.rgb}\r\nhue: 0\r\nsat: 0\r\nname: ${l.name}\r\n`), r.port, r.address);
+    }
+  });
+  udp.bind(19820, '127.0.0.1');
+  for (const [id, l] of Object.entries(yl)) {
+    net.createServer(sock => {
+      let buf = '';
+      sock.on('error', () => {});
+      sock.on('data', d => {
+        buf += d.toString();
+        let nl;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl).trim(); buf = buf.slice(nl + 1);
+          if (!line) continue;
+          const { id: rid, method, params } = JSON.parse(line);
+          ylLog.push([id, method, params]);
+          calls.push(['yeelight', id, method, params]);
+          const ok = () => { sock.write(`{"method":"props","params":{"power":"${l.p.power}"}}\r\n`); sock.write(`${JSON.stringify({ id: rid, result: ['ok'] })}\r\n`); };
+          const err = message => sock.write(`${JSON.stringify({ id: rid, error: { code: -1, message } })}\r\n`);
+          if (method === 'get_prop') { sock.write(`${JSON.stringify({ id: rid, result: params.map(k => String(l.p[k] ?? '')) })}\r\n`); continue; }
+          if (!l.support.split(' ').includes(method)) { err('method not supported'); continue; }
+          if (method === 'set_power') { l.p.power = params[0]; ok(); continue; }
+          if (l.p.power !== 'on') { err('general error'); continue; }
+          if (method === 'set_bright') { l.p.bright = params[0]; ok(); continue; }
+          if (method === 'set_ct_abx') { if (params[0] < 1700 || params[0] > 6500) { err('invalid params'); continue; } l.p.ct = params[0]; l.p.color_mode = 2; ok(); continue; }
+          if (method === 'set_rgb') { l.p.rgb = params[0]; l.p.color_mode = 1; ok(); continue; }
+          if (method === 'set_hsv') { l.p.hue = params[0]; l.p.sat = params[1]; l.p.color_mode = 3; ok(); continue; }
+          err('method not supported');
+        }
+      });
+    }).listen(l.port, '127.0.0.1');
+  }
+  hue.get('/yeelight', (q, s) => s.json(Object.fromEntries(Object.entries(yl).map(([id, l]) => [id, l.p]))));
+}
+
 console.log('mocks up');
