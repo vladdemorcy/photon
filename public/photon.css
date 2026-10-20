@@ -739,7 +739,8 @@ body.signed-out .tabs, body.signed-out .save-state { display: none; }
 
   .editor { gap: 12px; }
   .room-head { gap: 8px 12px; }
-  .room-head .room-name { font-size: 23px; flex: 1 1 0; width: 0; min-width: 0; field-sizing: fixed; text-overflow: ellipsis; }
+  /* The name and the on/off switch share the first line; what's playing gets its own line below. */
+  .room-head .room-name { font-size: 23px; flex: 1 1 60%; width: 0; min-width: 0; field-sizing: fixed; text-overflow: ellipsis; }
   .now-playing, .filter-note { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
   .room-tabs {

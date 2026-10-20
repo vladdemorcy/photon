@@ -1,4 +1,4 @@
-# Photon
+<p align="center"><img src="public/photon-logo.jpg" alt="Photon" width="640"></p>
 
 Photon sets each room's lights to match what's playing. When a movie starts on the living room TV, the lights you picked for that room dim down. When you pause, they come up, and when you stop, they go back to how they were. You decide what each event does, and you can make it depend on the time of day.
 
@@ -9,6 +9,20 @@ Photon sets each room's lights to match what's playing. When a movie starts on t
 **Download:** get the Windows and Mac installers and the Android app from this repository's **Releases** page. Step-by-step guides: [Installing Photon](docs/INSTALL.md) and [Troubleshooting](docs/TROUBLESHOOTING.md).
 
 You can use more than one of each at the same time. A single room can mix Hue and Govee lights, for example, and respond to both Plex and Jellyfin players.
+
+### On an Android phone
+
+The Android app runs Photon on the phone itself, with the same pages as the desktop version laid out for a small screen.
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="20%"><img src="docs/images/android-room.jpg" alt="A room on the floor plan, dimmed while Kodi plays" width="160"><br><sub>A room on the floor plan, dimmed while Kodi plays</sub></td>
+    <td align="center" valign="top" width="20%"><img src="docs/images/android-3d.jpg" alt="The same room in 3D" width="160"><br><sub>The same room in 3D</sub></td>
+    <td align="center" valign="top" width="20%"><img src="docs/images/android-behaviors.jpg" alt="What happens on play, pause, resume and stop" width="160"><br><sub>What happens on play, pause, resume and stop</sub></td>
+    <td align="center" valign="top" width="20%"><img src="docs/images/android-kodi.jpg" alt="Kodi under TVs and players" width="160"><br><sub>Kodi under TVs and players</sub></td>
+    <td align="center" valign="top" width="20%"><img src="docs/images/android-activity.jpg" alt="What Photon heard and what it did" width="160"><br><sub>What Photon heard and what it did</sub></td>
+  </tr>
+</table>
 
 **Version 1.7** adds Kodi as a player. **1.6** added TV sync boxes (Hue Play HDMI Sync Box and Govee DreamView). **1.5** gave Photon a proper sign-in: you choose a password when you install it, and each browser stays signed in with a secure cookie. See [Signing in and security](#signing-in-and-security). 1.5.1 moves Photon's own options into a new **Settings** tab, so Connections is only for connecting lights, media servers and TVs. 1.4 added Smart TVs (Roku, LG, Android TV / Fire TV, Chromecast, Vizio and Samsung) as players, and 1.4.4 a layout made for phones and touch tablets. 1.3 added Lutron Caseta, 1.2 outdoor spaces. 1.1 added IKEA Home smart and Treatlife / Smart Life lights. The version number is shown next to the Photon name at the top of the app, printed when Photon starts, and available at `/api/version`. It comes from `version` in `package.json`, so that one field is all you change when releasing a new version.
 
