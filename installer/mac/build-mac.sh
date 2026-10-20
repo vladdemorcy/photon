@@ -18,7 +18,7 @@ LIB="$WORK/root/Library/Photon"
 
 # The app, with production packages (all plain JavaScript, so they run on any Mac).
 mkdir -p "$LIB/app"
-cp -r "$ROOT/src" "$ROOT/public" "$ROOT/package.json" "$ROOT/package-lock.json" "$ROOT/README.md" "$LIB/app/"
+cp -r "$ROOT/src" "$ROOT/public" "$ROOT/package.json" "$ROOT/package-lock.json" "$ROOT/README.md" "$ROOT/LICENSE" "$ROOT/THIRD-PARTY-NOTICES.md" "$ROOT/licenses" "$LIB/app/"
 (cd "$LIB/app" && npm ci --omit=dev --no-audit --no-fund --ignore-scripts --loglevel=error)
 if find "$LIB/app/node_modules" -name '*.node' | grep -q .; then echo "A package has a native add-on. Stopping." >&2; exit 1; fi
 THREE="$LIB/app/node_modules/three"; KEEP="$(mktemp -d)"

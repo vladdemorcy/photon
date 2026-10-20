@@ -14,6 +14,7 @@ See [Installing Photon](https://github.com/vladdemorcy/photon/blob/main/docs/INS
 - Like every other brand, Yeelights can share a room with Hue, Govee or any other lights.
 
 **Also**
+- Photon now has a LICENSE file: it's free to use at home, and the code is all rights reserved. The third-party components it includes, and their licenses, are listed in THIRD-PARTY-NOTICES.md, which now ships with all three installers (the Mac installer was missing it).
 - The Plex card now explains what to do with a free Plex account and no Plex Media Server: follow the TV under TVs and players instead.
 
 The installers aren't code-signed, so Windows SmartScreen and macOS Gatekeeper ask once before running them. The Android app isn't from the Play Store, so Android asks to allow installs from your browser, and Play Protect may ask you to confirm.

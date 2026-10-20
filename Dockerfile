@@ -4,6 +4,8 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 COPY src ./src
 COPY public ./public
+COPY LICENSE THIRD-PARTY-NOTICES.md ./
+COPY licenses ./licenses
 ENV PORT=8787 CONFIG_PATH=/data/config.json
 VOLUME /data
 EXPOSE 8787

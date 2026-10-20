@@ -1,0 +1,24 @@
+Photon
+Copyright (c) 2026 Vladimir Demorcy. All rights reserved.
+
+Photon is free to download and use. You may install the released versions of Photon
+(from this repository's Releases page) on your own devices and use them for your own
+home, at no cost.
+
+You may read Photon's source code here on GitHub. Apart from what GitHub's Terms of
+Service allow on GitHub itself (viewing the repository and forking it there), no other
+rights are granted. Without written permission from the copyright holder, you may not
+copy, modify, publish, distribute, sell, sublicense, or make other works based on
+Photon's source code, its images, or its installers.
+
+Photon includes third-party components that remain under their own licenses. Those
+licenses, not this one, apply to those components. See THIRD-PARTY-NOTICES.md and the
+licenses folder.
+
+Photon is provided "as is", without warranty of any kind, express or implied, including
+but not limited to the warranties of merchantability, fitness for a particular purpose
+and noninfringement. In no event shall the copyright holder be liable for any claim,
+damages or other liability, whether in an action of contract, tort or otherwise, arising
+from, out of or in connection with Photon or the use of or other dealings in Photon.
+
+For permission requests, open an issue at https://github.com/vladdemorcy/photon.

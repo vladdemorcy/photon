@@ -12,7 +12,7 @@ rm -rf "$ROOT/build" && mkdir -p "$STAGE/app" "$STAGE/service" "$STAGE/installer
 
 # The app, with production packages installed fresh (all of them are plain JavaScript,
 # so packages installed here run on Windows too).
-cp -r "$ROOT/src" "$ROOT/public" "$ROOT/package.json" "$ROOT/package-lock.json" "$ROOT/README.md" "$STAGE/app/"
+cp -r "$ROOT/src" "$ROOT/public" "$ROOT/package.json" "$ROOT/package-lock.json" "$ROOT/README.md" "$ROOT/LICENSE" "$ROOT/THIRD-PARTY-NOTICES.md" "$ROOT/licenses" "$STAGE/app/"
 (cd "$STAGE/app" && npm ci --omit=dev --no-audit --no-fund --ignore-scripts --loglevel=error)
 if find "$STAGE/app/node_modules" -name '*.node' | grep -q .; then
   echo "A package has a native add-on, which wouldn't run on Windows. Stopping." >&2

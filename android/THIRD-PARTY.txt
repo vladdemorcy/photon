@@ -1,14 +1,6 @@
-The Photon Android app includes these third-party components:
+Photon is Copyright (c) 2026 Vladimir Demorcy. All rights reserved. See LICENSE.
 
-Node.js 18.20.4 built for Android by nodejs-mobile (lib/*/libnode.so), MIT License
-  https://github.com/nodejs-mobile/nodejs-mobile
-  Node.js and the libraries it bundles (V8, libuv, OpenSSL, ICU and others) are covered by
-  their own licenses, listed at https://github.com/nodejs/node/blob/v18.20.4/LICENSE
-  The nodejs-mobile license is in licenses/nodejs-mobile-LICENSE.txt.
-
-LLVM libc++ from the Android NDK r27 (lib/*/libc++_shared.so),
-  Apache License 2.0 with LLVM Exceptions, https://llvm.org/LICENSE.txt
-  Taken unchanged (apart from its library name) from pyzmq's Android packages on PyPI.
-
-Everything else Photon includes is listed in THIRD-PARTY.txt in the Windows installer and
-in each package's own license file under node_modules.
+The third-party components the Android app includes (Node.js built by nodejs-mobile, LLVM libc++,
+fonts, Lutron and LG pairing data, and the JavaScript packages) and their licenses are listed in
+THIRD-PARTY-NOTICES.md, with the full license texts in the licenses folder. Each JavaScript
+package also keeps its own license file in node_modules.

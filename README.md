@@ -32,6 +32,12 @@ The Android app runs Photon on the phone itself, with the same pages as the desk
 
 Photon is free. If it makes movie night better and you'd like to help with its development, you can [donate through PayPal](https://www.paypal.com/donate/?business=55NTF3K7DM966&no_recurring=0&item_name=Photon+App+development&currency_code=USD). Thank you!
 
+## License
+
+Photon is free to download and use at home, but it isn't open source: the code is Copyright (c) 2026 Vladimir Demorcy, all rights reserved. You're welcome to read it here, but please don't copy, modify or redistribute it without asking. See [LICENSE](LICENSE) for the details.
+
+Photon uses some third-party components (fonts, a few open source libraries, and on Android, Node.js). They keep their own licenses, which are listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) and included with every installer.
+
 ## Install on Windows (easiest)
 
 Run **Photon-Setup-1.6.1.exe** on the computer that should run Photon (often the same one as your media server) and say yes to the admin prompt. Setup:
@@ -300,6 +306,9 @@ src/schedule.js        time windows, sunrise/sunset
 src/lighting/*.js      one file per lighting system (same interface)
 src/media/*.js         Plex, Jellyfin/Emby, and the event de-duplicator
 public/                the web UI (no build step), 3D view in room3d.js, furniture sizes in furniture.js
+THIRD-PARTY-NOTICES.md third-party components and their licenses (rebuild the package list with
+                       node installer/tools/notices.js after changing dependencies)
+licenses/              full license texts for the third-party components
 test/tv-mocks.js       stand-in Roku, LG, Android TV, Chromecast, Vizio, Samsung and Kodi
 test/mocks.js          fake Hue bridge, Home Assistant, IKEA hub, Lutron bridge, Tuya cloud, Wyze cloud, two Yeelights and plex.tv for trying things out (run Photon with PLEX_TV_URL=http://127.0.0.1:8124
                        DIRIGERA_EXTRA_CA=test/fixtures/dirigera-cert.pem LUTRON_EXTRA_CA=test/fixtures/lutron-ca.pem TUYA_BASE_URL=http://127.0.0.1:8125)

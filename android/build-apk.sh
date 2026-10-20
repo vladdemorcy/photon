@@ -110,7 +110,7 @@ done
 # ---- 3. Photon itself, packed into one file the app unpacks on first start --------------------
 STAGE="$OUT/photon"
 mkdir -p "$STAGE"
-cp -r "$ROOT/src" "$ROOT/public" "$ROOT/package.json" "$ROOT/package-lock.json" "$STAGE/"
+cp -r "$ROOT/src" "$ROOT/public" "$ROOT/package.json" "$ROOT/package-lock.json" "$ROOT/LICENSE" "$ROOT/THIRD-PARTY-NOTICES.md" "$ROOT/licenses" "$STAGE/"
 cp "$ANDROID/android-main.js" "$ANDROID/THIRD-PARTY.txt" "$STAGE/"
 mkdir -p "$STAGE/licenses"
 cp "$VENDOR/libnode/LICENSE" "$STAGE/licenses/nodejs-mobile-LICENSE.txt"
