@@ -87,7 +87,8 @@ Open the TV's card under **Connections > TVs and players**. It shows what each T
 - **Govee:** turn on *LAN Control* for each light in the Govee app, or add a cloud API key.
 - **IKEA:** click *Pair*, then press the button on the bottom of the DIRIGERA hub within a minute.
 - **Lutron Caseta:** click *Pair*, then press the small black button on the back of the bridge.
-- **Treatlife / Smart Life:** if Photon says the Tuya plan expired, extend it at platform.tuya.com (Cloud > Cloud Services > IoT Core).
+- **Smart Life (Treatlife, Gosund):** if Photon says the Tuya plan expired, extend it at platform.tuya.com (Cloud > Cloud Services > IoT Core).
+- **Gosund or Treatlife lights don't show up:** Photon only sees lights in the Smart Life app linked to your Tuya cloud project. Lights still in the Gosund or Treatlife app have to be added to Smart Life (reset the light, then add it there). Gosund says it can't move devices between apps for you.
 - **Wyze: "refused the sign-in".** Check the email and password you use in the Wyze app, and that the API key and key ID come from the same key at developer-api-console.wyze.com. Wyze shows the API key only once, so if you lost it, make a new key.
 - **Wyze: "needs you to sign in again".** Click *Sign in to Wyze*. Accounts with two-step verification need the code each time, so Photon never signs in on its own for them.
 - **Wyze lights are slow or skip a change.** Wyze lights only take commands through Wyze's cloud, which adds about a second, and Wyze limits how often an account can send commands. A light that's switched off at the wall shows as offline.

@@ -1,6 +1,6 @@
 {
   "name": "photon",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "description": "Photon: room-by-room lighting that follows what's playing on Plex, Jellyfin or Emby. Works with Hue, Govee, LIFX, WiZ, Nanoleaf and Home Assistant.",
   "main": "src/server.js",
   "scripts": {

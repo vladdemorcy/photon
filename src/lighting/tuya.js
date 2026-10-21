@@ -1,6 +1,6 @@
 'use strict';
 
-// Tuya cloud. Treatlife, Smart Life and most "Tuya Smart" bulbs, strips, dimmers, switches and
+// Tuya cloud. Treatlife, Gosund, Smart Life and most "Tuya Smart" bulbs, strips, dimmers, switches and
 // plugs are Tuya devices underneath. Needs a free cloud project at platform.tuya.com with the
 // Smart Life (or Tuya Smart) app account linked to it. Targets: "<device id>".
 
@@ -114,8 +114,8 @@ async function send(c, id, commands) {
 
 module.exports = {
   id: 'tuya',
-  label: 'Treatlife / Smart Life',
-  blurb: 'Treatlife, Smart Life and other Tuya-based lights, dimmers and plugs, through a free Tuya cloud project linked to your app account.',
+  label: 'Smart Life (Treatlife, Gosund)',
+  blurb: 'Treatlife, Gosund, Smart Life and other Tuya-based lights, dimmers and plugs, through a free Tuya cloud project linked to your Smart Life app account. Lights set up in the Treatlife or Gosund app need to be added to the Smart Life app first, since those apps can\'t be linked.',
   fields: [
     { key: 'region', label: 'Data center', type: 'select', default: 'us', options: [
       { value: 'us', label: 'Western America' }, { value: 'us-e', label: 'Eastern America' },
