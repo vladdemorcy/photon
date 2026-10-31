@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#02070d">
+  <title>QUINN</title>
+  <link rel="icon" href="quinn-mark.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;800&family=Rajdhani:wght@400;500;600&family=Share+Tech+Mono&display=swap">
+  <link rel="stylesheet" href="quinn.css">
+</head>
+<body class="state-idle">
+  <div class="bg-grid" aria-hidden="true"></div>
+  <div class="bg-scan" aria-hidden="true"></div>
+
+  <!-- Boot / engage overlay. The click gives the browser permission for audio and the microphone. -->
+  <div id="boot" class="boot">
+    <div class="boot-inner">
+      <img class="boot-mark" src="quinn-mark.svg" alt="">
+      <div class="boot-title">Q U I N N</div>
+      <div class="boot-sub">Quantum Unified Intelligence Neural Nexus</div>
+      <pre id="bootLog" class="boot-log" aria-live="polite"></pre>
+      <button id="engage" class="engage" type="button">
+        <span>Engage</span>
+      </button>
+      <div class="boot-hint">Microphone access is needed for voice control. Chrome or Edge recommended.</div>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <img src="quinn-mark.svg" alt="" class="brand-mark">
+      <div>
+        <div class="brand-name">QUINN</div>
+        <div class="brand-sub">Claude Code Interface · <span id="ver">v1.0</span></div>
+      </div>
+    </div>
+    <div class="chips">
+      <span class="chip" id="chipLink"><i></i>Claude link</span>
+      <span class="chip" id="chipMic"><i></i>Audio in</span>
+      <span class="chip" id="chipVoice"><i></i>Voice out</span>
+      <span class="chip" id="chipWake"><i></i>Wake word</span>
+    </div>
+    <div class="clock">
+      <div id="clockTime" class="clock-time">--:--:--</div>
+      <div id="clockDate" class="clock-date">---</div>
+    </div>
+    <button class="icon-btn" id="openSettings" type="button" aria-label="Settings" title="Settings">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M19.4 13a7.5 7.5 0 0 0 0-2l2.1-1.6-2-3.5-2.5 1a7.6 7.6 0 0 0-1.7-1L15 3h-4l-.3 2.9a7.6 7.6 0 0 0-1.7 1l-2.5-1-2 3.5L6.6 11a7.5 7.5 0 0 0 0 2l-2.1 1.6 2 3.5 2.5-1c.5.4 1.1.7 1.7 1L11 21h4l.3-2.9c.6-.3 1.2-.6 1.7-1l2.5 1 2-3.5zM13 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z" transform="translate(-1 0)"/></svg>
+    </button>
+  </header>
+
+  <main class="hud">
+    <!-- Left: telemetry -->
+    <section class="col col-left">
+      <div class="panel">
+        <div class="panel-head"><span>System Telemetry</span><em id="hostName">—</em></div>
+        <div class="gauges">
+          <div class="gauge" id="gCpu"><svg viewBox="0 0 100 100"><circle class="g-track" cx="50" cy="50" r="40"/><circle class="g-fill" cx="50" cy="50" r="40"/></svg><b>0%</b><small>CPU</small></div>
+          <div class="gauge amber" id="gMem"><svg viewBox="0 0 100 100"><circle class="g-track" cx="50" cy="50" r="40"/><circle class="g-fill" cx="50" cy="50" r="40"/></svg><b>0%</b><small>Memory</small></div>
+          <div class="gauge" id="gLoad"><svg viewBox="0 0 100 100"><circle class="g-track" cx="50" cy="50" r="40"/><circle class="g-fill" cx="50" cy="50" r="40"/></svg><b>0.0</b><small>Load</small></div>
+        </div>
+        <canvas id="spark" class="spark" height="60"></canvas>
+        <dl class="kv">
+          <dt>Platform</dt><dd id="kvPlatform">—</dd>
+          <dt>Processor</dt><dd id="kvCpu">—</dd>
+          <dt>Uptime</dt><dd id="kvUptime">—</dd>
+          <dt>Network</dt><dd id="kvNet">—</dd>
+          <dt>Workspace</dt><dd id="kvWork">—</dd>
+        </dl>
+      </div>
+
+      <div class="panel grow">
+        <div class="panel-head"><span>Operations</span><em id="opsCount">0</em></div>
+        <ol id="ops" class="ops"></ol>
+      </div>
+    </section>
+
+    <!-- Center: reactor -->
+    <section class="col col-center">
+      <div class="reactor-wrap">
+        <canvas id="reactor" class="reactor" aria-hidden="true"></canvas>
+        <div class="reactor-core">
+          <div id="stateLabel" class="state-label">Standby</div>
+          <div id="stateSub" class="state-sub">Say “Quinn” to begin</div>
+        </div>
+      </div>
+      <div class="readout">
+        <div id="heard" class="heard" aria-live="polite"></div>
+        <div id="reply" class="reply" aria-live="polite"></div>
+      </div>
+      <div class="directives" id="directives">
+        <button type="button" data-cmd="system status">System status</button>
+        <button type="button" data-cmd="Summarize this project in two sentences.">Brief me on this project</button>
+        <button type="button" data-cmd="What changed in git recently?">Recent changes</button>
+        <button type="button" data-cmd="new session">New session</button>
+      </div>
+    </section>
+
+    <!-- Right: comms -->
+    <section class="col col-right">
+      <div class="panel">
+        <div class="panel-head"><span>Session</span><em id="sessState">offline</em></div>
+        <dl class="kv kv-tight">
+          <dt>Model</dt><dd id="sessModel">—</dd>
+          <dt>Session</dt><dd id="sessId">new</dd>
+          <dt>Last run</dt><dd id="sessRun">—</dd>
+          <dt>Spend</dt><dd id="sessCost">$0.0000</dd>
+        </dl>
+      </div>
+      <div class="panel grow">
+        <div class="panel-head"><span>Comms Log</span><em id="logCount">0</em></div>
+        <div id="log" class="log" aria-live="polite"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="cmdbar">
+    <button id="micBtn" class="mic" type="button" aria-label="Talk to Quinn" title="Click or hold Space to talk">
+      <svg viewBox="0 0 24 24" width="26" height="26"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.9V21h2v-2.1a7 7 0 0 0 6-6.9z"/></svg>
+    </button>
+    <canvas id="wave" class="wave" height="44" aria-hidden="true"></canvas>
+    <form id="cmdForm" class="cmd-form" autocomplete="off">
+      <span class="prompt">&gt;</span>
+      <input id="cmd" type="text" placeholder="Type a directive, or say “Quinn…”" aria-label="Directive">
+      <button type="submit" class="send">Execute</button>
+      <button type="button" class="abort" id="abortBtn" hidden>Abort</button>
+    </form>
+  </footer>
+
+  <dialog id="settings" class="settings">
+    <form method="dialog">
+      <div class="panel-head"><span>Configuration</span></div>
+      <label>Voice<select id="setVoice"></select></label>
+      <label>Speech rate <output id="rateOut">1.0</output><input id="setRate" type="range" min="0.6" max="1.6" step="0.05" value="1.0"></label>
+      <label>Pitch <output id="pitchOut">1.0</output><input id="setPitch" type="range" min="0.5" max="1.5" step="0.05" value="0.95"></label>
+      <label class="row"><input id="setWake" type="checkbox" checked> Always listen for “Quinn”</label>
+      <label class="row"><input id="setSpeak" type="checkbox" checked> Speak replies aloud</label>
+      <label class="row"><input id="setSfx" type="checkbox" checked> Interface sounds</label>
+      <div class="help">
+        <b>Voice commands</b>
+        <ul>
+          <li>“Quinn, <i>anything</i>” — sent to Claude Code</li>
+          <li>“Quinn, stop” — abort and stop speaking</li>
+          <li>“Quinn, system status” · “what time is it”</li>
+          <li>“Quinn, new session” · “clear screen”</li>
+          <li>“Quinn, mute” / “unmute” · “go to sleep”</li>
+        </ul>
+        <b>Keys</b>: hold <kbd>Space</kbd> to talk (outside the text box), <kbd>Esc</kbd> to abort.
+      </div>
+      <div class="dialog-actions"><button value="close" class="send">Done</button></div>
+    </form>
+  </dialog>
+
+  <script src="quinn.js"></script>
+</body>
+</html>
