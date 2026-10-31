@@ -1,5 +1,7 @@
 # QUINN
 
+<p align="center"><img src="preview.png" alt="The Quinn HUD" width="800"></p>
+
 Quinn is a voice-controlled, Iron Man–style HUD for Claude Code. You talk to it (or type), it hands the request to the `claude` CLI on your machine, shows Claude's work as it happens, and reads the answer back to you.
 
 - **Voice control:** say “Quinn, …” at any time, or click the mic / hold <kbd>Space</kbd> to talk without the wake word.
