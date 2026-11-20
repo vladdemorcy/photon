@@ -14,4 +14,7 @@ See [Installing Photon](https://github.com/vladdemorcy/photon/blob/main/docs/INS
 - Very old bridges that only speak HTTP still work.
 - The Hue Sync Box's link to the bridge (for finding its entertainment area lights) uses the same encrypted connection.
 
+**Android: reinstall once**
+- The Android app is now signed with a new key, so Android won't install 1.9.2 over 1.9.1 or older. Before uninstalling the old app, save your settings under Settings > Saved versions > Download settings, then install 1.9.2 and import them under Settings > Saved versions > Import settings from another Photon. The steps are in [Installing Photon](https://github.com/vladdemorcy/photon/blob/main/docs/INSTALL.md#updating). Later updates install over the top as usual.
+
 The installers aren't code-signed, so Windows SmartScreen and macOS Gatekeeper ask once before running them. The Android app isn't from the Play Store, so Android asks to allow installs from your browser, and Play Protect may ask you to confirm.

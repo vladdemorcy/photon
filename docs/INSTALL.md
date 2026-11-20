@@ -57,7 +57,16 @@ If you ran Photon by hand (not with an installer), the first time you open it, i
 
 ## Updating
 
-Download the newer installer and run it. It upgrades in place and keeps your rooms, lights, sign-ins and settings. On Android, open the newer APK and tap **Update**; Photon restarts by itself. Photon also saves a copy of your settings every time it starts, so an update can always be undone under **Settings > Saved versions**.
+Download the newer installer and run it. It upgrades in place and keeps your rooms, lights, sign-ins and settings. On Android, open the newer APK and tap **Update**; Photon restarts by itself.
+
+**Android, going from 1.9.1 or older to 1.9.2 or newer (once only):** 1.9.2 is signed with a new key, so Android won't install it over an older Photon app (it says "App not installed" or that the package conflicts). Move your setup across like this:
+
+1. In the old app, go to **Settings > Saved versions**, type your Photon password and tap **Download settings**. Keep the file on the phone.
+2. Uninstall the old Photon app (long press its icon, then **Uninstall**).
+3. Install the new APK, set a password, and sign in.
+4. Go to **Settings > Saved versions**, tap **Import settings from another Photon…**, and pick the file from step 1. Your rooms, lights and connections come back.
+
+After this, updates install over the top again as usual. Photon also saves a copy of your settings every time it starts, so an update can always be undone under **Settings > Saved versions**.
 
 ## Removing
 
