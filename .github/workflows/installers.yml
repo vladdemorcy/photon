@@ -53,6 +53,8 @@ jobs:
           node test/sync-test.js http://127.0.0.1:18830 'sync test lights glow' || { cat "$RUNNER_TEMP/sync.log"; exit 1; }
       - name: Third-party notices are up to date
         run: node installer/tools/notices.js --check
+      - name: Hue bridges over HTTPS
+        run: node test/hue-test.js
       - name: Kodi player
         run: node test/kodi-test.js
       - name: Wyze lights

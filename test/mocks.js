@@ -34,6 +34,66 @@ hue.get('/calls', (q, s) => s.json(calls));
 hue.get('/state', (q, s) => s.json(Object.fromEntries(Object.entries(lights).map(([k, v]) => [k, v.state]))));
 hue.listen(8099);
 
+// The same fake bridge on 8098, the way updated bridges work: HTTPS only. POST /hue-tls on 8099
+// switches what 8098 presents: {"mode":"self"} its own certificate (the default), "self2" a
+// different self-made one (a replaced bridge, or someone posing as it), "signed" one signed by
+// the test root served at GET /hue-ca (stands in for Signify's root; save it and point
+// HUE_ROOT_CA at the file), or "http" plain HTTP only (older firmware).
+{
+  const forge = require('node-forge');
+  const tlsMod = require('tls');
+  const httpMod = require('http');
+  const keys = forge.pki.rsa.generateKeyPair(1024);
+  const make = (cn, issuer, issuerKey, isCa) => {
+    const cert = forge.pki.createCertificate();
+    cert.publicKey = keys.publicKey;
+    cert.serialNumber = String(Math.floor(Math.random() * 1e9));
+    cert.validity.notBefore = new Date(Date.now() - 864e5);
+    cert.validity.notAfter = new Date(Date.now() + 365 * 864e5);
+    const subject = [{ name: 'commonName', value: cn }, { name: 'organizationName', value: 'Mock Hue' }];
+    cert.setSubject(subject);
+    cert.setIssuer(issuer ? issuer.subject.attributes : subject);
+    cert.setExtensions(isCa ? [{ name: 'basicConstraints', cA: true }, { name: 'keyUsage', keyCertSign: true, digitalSignature: true }] : [{ name: 'basicConstraints', cA: false }]);
+    cert.sign(issuerKey || keys.privateKey, forge.md.sha256.create());
+    return cert;
+  };
+  const caKeys = forge.pki.rsa.generateKeyPair(1024);
+  const ca = (() => {
+    const cert = forge.pki.createCertificate();
+    cert.publicKey = caKeys.publicKey; cert.serialNumber = '01';
+    cert.validity.notBefore = new Date(Date.now() - 864e5); cert.validity.notAfter = new Date(Date.now() + 3650 * 864e5);
+    const subject = [{ name: 'commonName', value: 'Mock Hue Root CA' }];
+    cert.setSubject(subject); cert.setIssuer(subject);
+    cert.setExtensions([{ name: 'basicConstraints', cA: true }, { name: 'keyUsage', keyCertSign: true, cRLSign: true }]);
+    cert.sign(caKeys.privateKey, forge.md.sha256.create());
+    return cert;
+  })();
+  hue.get('/hue-ca', (q, s) => s.type('text/plain').send(forge.pki.certificateToPem(ca)));
+  const keyPem = forge.pki.privateKeyToPem(keys.privateKey);
+  const contexts = {
+    self: { key: keyPem, cert: forge.pki.certificateToPem(make('001788fffe000001')) },
+    self2: { key: keyPem, cert: forge.pki.certificateToPem(make('001788fffe000002')) },
+    signed: { key: keyPem, cert: forge.pki.certificateToPem(make('001788fffe000001', ca, caKeys.privateKey)) },
+  };
+  let mode = 'self';
+  let server = null;
+  const start = () => new Promise(resolve => {
+    server = mode === 'http'
+      ? httpMod.createServer(hue)
+      : tlsMod.createServer(contexts[mode], t => { t.on('error', () => {}); httpMod.createServer(hue).emit('connection', t); });
+    server.on('tlsClientError', () => {});
+    server.on('connection', sock => sock.on('error', () => {}));
+    server.listen(8098, resolve);
+  });
+  hue.post('/hue-tls', async (q, s) => {
+    mode = q.body.mode;
+    await new Promise(r => { server.close(r); server.closeAllConnections?.(); });
+    await start();
+    s.json({ mode });
+  });
+  start();
+}
+
 const ha = express(); ha.use(express.json());
 const st = { 'light.lamp': { entity_id: 'light.lamp', state: 'on', attributes: { friendly_name: 'Kasa lamp', brightness: 180, color_mode: 'color_temp', color_temp_kelvin: 3000, supported_color_modes: ['color_temp'] } } };
 ha.use((q, s, n) => q.headers.authorization === 'Bearer hatoken' ? n() : s.status(401).json({ message: 'unauthorized' }));

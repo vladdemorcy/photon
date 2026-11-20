@@ -15,6 +15,7 @@
 const http = require('http');
 const tls = require('tls');
 const crypto = require('crypto');
+const hueBridge = require('./hue-bridge');
 
 const INTENSITIES = ['subtle', 'moderate', 'high', 'intense'];
 const MODES = ['video', 'music', 'game'];
@@ -155,11 +156,11 @@ module.exports = {
     if (!groupId || !hue?.enabled || !hue.bridgeIp || !hue.username) return [];
     const { http } = require('../util');
     if (/^\d+$/.test(String(groupId))) {
-      const g = await http('GET', `http://${hue.bridgeIp}/api/${hue.username}/groups/${groupId}`);
+      const g = await hueBridge.request(hue.bridgeIp, 'GET', `/${hue.username}/groups/${groupId}`);
       return (g?.lights || []).map(l => `hue::l${l}`);
     }
     // Newer bridges name entertainment areas with an ID from Hue's newer API.
-    const g = await http('GET', `http://${hue.bridgeIp}/api/${hue.username}/groups`);
+    const g = await hueBridge.request(hue.bridgeIp, 'GET', `/${hue.username}/groups`);
     const match = Object.entries(g || {}).find(([, x]) => x.type === 'Entertainment' && (x.name === data?.hue?.groups?.[groupId]?.name));
     return match ? match[1].lights.map(l => `hue::l${l}`) : [];
   },

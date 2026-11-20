@@ -1,13 +1,14 @@
 'use strict';
 
-// Philips Hue, local bridge API (v1). Targets: "l<id>" for a light, "g<id>" for a room/zone.
+// Philips Hue, local bridge API (v1), over HTTPS (see hue-bridge.js).
+// Targets: "l<id>" for a light, "g<id>" for a room/zone.
 
 const { http, rgbToXy, clamp, guessShape } = require('../util');
+const bridge = require('./hue-bridge');
 
-const base = c => `http://${c.bridgeIp}/api/${c.username}`;
-
-async function call(method, url, body) {
-  const data = await http(method, url, { body });
+// path is relative to the app key, like '/lights'.
+async function call(c, method, path, body) {
+  const data = await bridge.request(c.bridgeIp, method, `/${c.username}${path}`, body);
   if (Array.isArray(data) && data[0]?.error) throw new Error(`Hue: ${data[0].error.description}`);
   return data;
 }
@@ -34,7 +35,7 @@ function fromSnapshot(s, transition) {
 module.exports = {
   id: 'hue',
   label: 'Philips Hue',
-  blurb: 'Talks to your Hue Bridge directly on your network.',
+  blurb: 'Talks to your Hue Bridge directly on your network, over an encrypted connection.',
   fields: [
     { key: 'bridgeIp', label: 'Bridge IP address', placeholder: '192.168.1.20' },
     { key: 'username', label: 'App key', placeholder: 'Filled in when you pair', secret: true },
@@ -54,7 +55,9 @@ module.exports = {
     }
     if (id === 'pair') {
       if (!c.bridgeIp) throw new Error('Enter the bridge IP first');
-      const data = await http('POST', `http://${c.bridgeIp}/api`, { body: { devicetype: 'photon#server' } });
+      // Pressing the button proves this is the right bridge, so trust its certificate afresh.
+      bridge.forget(c.bridgeIp);
+      const data = await bridge.request(c.bridgeIp, 'POST', '', { devicetype: 'photon#server' });
       const username = data?.[0]?.success?.username;
       if (!username) throw new Error(data?.[0]?.error?.description || 'Pairing failed. Press the round button on the bridge, then try within 30 seconds.');
       return { patch: { username }, message: 'Paired with the Hue bridge' };
@@ -64,7 +67,7 @@ module.exports = {
 
   async list(c) {
     const [lights, groups, scenes] = await Promise.all([
-      call('GET', `${base(c)}/lights`), call('GET', `${base(c)}/groups`), call('GET', `${base(c)}/scenes`),
+      call(c, 'GET', `/lights`), call(c, 'GET', `/groups`), call(c, 'GET', `/scenes`),
     ]);
     const targets = [];
     for (const [id, g] of Object.entries(groups)) {
@@ -91,30 +94,30 @@ module.exports = {
 
   async apply(c, id, state) {
     const body = toHue(state);
-    if (id.startsWith('g')) return call('PUT', `${base(c)}/groups/${id.slice(1)}/action`, body);
-    return call('PUT', `${base(c)}/lights/${id.slice(1)}/state`, body);
+    if (id.startsWith('g')) return call(c, 'PUT', `/groups/${id.slice(1)}/action`, body);
+    return call(c, 'PUT', `/lights/${id.slice(1)}/state`, body);
   },
 
   // The individual lights in a room or zone, for giving each its own random color.
   async members(c, id) {
     if (!id.startsWith('g')) return [id];
-    return (await call('GET', `${base(c)}/groups/${id.slice(1)}`)).lights.map(l => `l${l}`);
+    return (await call(c, 'GET', `/groups/${id.slice(1)}`)).lights.map(l => `l${l}`);
   },
 
   async snapshot(c, id) {
     let ids = [id.slice(1)];
-    if (id.startsWith('g')) ids = (await call('GET', `${base(c)}/groups/${id.slice(1)}`)).lights;
+    if (id.startsWith('g')) ids = (await call(c, 'GET', `/groups/${id.slice(1)}`)).lights;
     const out = {};
-    for (const lid of ids) out[lid] = (await call('GET', `${base(c)}/lights/${lid}`)).state;
+    for (const lid of ids) out[lid] = (await call(c, 'GET', `/lights/${lid}`)).state;
     return out;
   },
 
   async restore(c, id, snap, transition) {
-    for (const [lid, s] of Object.entries(snap)) await call('PUT', `${base(c)}/lights/${lid}/state`, fromSnapshot(s, transition));
+    for (const [lid, s] of Object.entries(snap)) await call(c, 'PUT', `/lights/${lid}/state`, fromSnapshot(s, transition));
   },
 
   async scene(c, sceneId, transition) {
     // Group 0 can recall any scene on the bridge.
-    return call('PUT', `${base(c)}/groups/0/action`, { scene: sceneId, transitiontime: Math.round(transition * 10) });
+    return call(c, 'PUT', `/groups/0/action`, { scene: sceneId, transitiontime: Math.round(transition * 10) });
   },
 };

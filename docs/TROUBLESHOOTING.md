@@ -84,6 +84,9 @@ Open the TV's card under **Connections > TVs and players**. It shows what each T
 ## Lights
 
 - **Hue:** if pairing fails, press the round button on the bridge and click *Pair* within 30 seconds.
+- **Hue: "connection refused" after the bridge updated.** Recent Hue bridge updates turn off plain HTTP, which Photon used before 1.9.2. Update Photon to 1.9.2 or newer; your pairing carries over and nothing else needs doing.
+- **Hue: "answered with a different certificate than before".** The bridge at that address isn't the one Photon knew. That's expected if you replaced or reset the bridge: press its button and click *Pair* so Photon trusts the new one. If you didn't change anything, check that the bridge's IP address hasn't been given to another device.
+- **Hue: "stopped answering on HTTPS".** The bridge used HTTPS before, and Photon won't drop to an unencrypted connection. Usually the bridge's IP address changed; click *Find bridge*, or set a fixed address for the bridge in your router.
 - **Govee:** turn on *LAN Control* for each light in the Govee app, or add a cloud API key.
 - **IKEA:** click *Pair*, then press the button on the bottom of the DIRIGERA hub within a minute.
 - **Lutron Caseta:** click *Pair*, then press the small black button on the back of the bridge.

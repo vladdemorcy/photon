@@ -51,6 +51,7 @@ own license file inside \`node_modules\`.
 | Sora font | SIL Open Font License 1.1 | Headings in the app | [licenses/Sora-OFL.txt](licenses/Sora-OFL.txt) |
 | IBM Plex Sans font | SIL Open Font License 1.1 | Text in the app | [licenses/IBMPlexSans-OFL.txt](licenses/IBMPlexSans-OFL.txt) |
 | Lutron Caseta pairing certificates, from [pylutron-caseta](https://github.com/gurumitts/pylutron-caseta) | Apache License 2.0 | \`src/lighting/lutron-certs.js\`, used to pair with a Caseta bridge | [licenses/pylutron-caseta-Apache-2.0.txt](licenses/pylutron-caseta-Apache-2.0.txt) |
+| Philips Hue bridge root certificates ("root-bridge" and "Hue Root CA 01"), published by Signify | Public certificates, no license terms | \`src/lighting/hue-root-ca.pem\`, used to check a Hue bridge is genuine | |
 | LG webOS registration manifest, from [aiowebostv](https://github.com/home-assistant-libs/aiowebostv) | Apache License 2.0 | \`src/media/tv/lg.js\`, used to pair with an LG TV | [licenses/aiowebostv-Apache-2.0.txt](licenses/aiowebostv-Apache-2.0.txt) |
 
 ## Windows installer only
