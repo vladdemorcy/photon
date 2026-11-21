@@ -111,7 +111,7 @@ const notTls = err => err && (err.code === 'EPROTO' || err.code === 'ECONNRESET'
 
 function friendly(err, b) {
   if (err.code === 'ECERTCHANGED') return err;
-  if (err.code === 'ECONNREFUSED') return new Error(`connection refused reaching the Hue bridge at ${b.host}`);
+  if (err.code === 'ECONNREFUSED') return new Error(`connection refused reaching the Hue bridge at ${b.host}. Check the bridge's IP address in the Hue app, and if this computer has a VPN on, turn it off or allow local network access in the VPN's settings.`);
   if (err.code === 'EHOSTUNREACH' || err.code === 'ENETUNREACH') return new Error(`host unreachable: the Hue bridge at ${b.host}`);
   if (err.code === 'ETIMEDOUT') return new Error(`no response from the Hue bridge at ${b.host}`);
   return err;
